@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\alglib\optimization.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\alglibinternal.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\linalg.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\alglibmisc.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\ap.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\dataanalysis.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\diffequations.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\fasttransforms.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\integration.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\interpolation.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\solvers.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\specialfunctions.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\alglib\statistics.cpp">
+      <Filter>algLib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\polyClipper\clipper.cpp">
+      <Filter>clipper</Filter>
+    </ClCompile>
+    <ClCompile Include="src\userSrc\sketch_empty\sketch_empty.cpp">
+      <Filter>sketches</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\alice\MODEL.h">
+      <Filter>MVC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\alice\Controller.h">
+      <Filter>MVC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\alice\utilities.h">
+      <Filter>MVC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\alice\object.h">
+      <Filter>MVC</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="algLib">
+      <UniqueIdentifier>{86505d70-40b7-4f3c-95be-9e8ec63c9a1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MVC">
+      <UniqueIdentifier>{363452be-02d7-4398-854d-90ea253cf8b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sketches">
+      <UniqueIdentifier>{4f63c95e-fc4a-4d9a-a768-3ceaeac8cedc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="clipper">
+      <UniqueIdentifier>{e8cb83cd-7e98-4aa6-9736-93c6addaedcf}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
