@@ -3,6 +3,8 @@
 #ifdef _MAIN_
 
 #include "main.h"
+
+
 //////////////////////////////////////				INCLUDES				//////////////////////////////////////
 
 
@@ -19,11 +21,9 @@
 ///// ---------------------------------------------------------- MODEL ------------------------------
 
 
-
 void setup()
 {
-
-
+	
 
 }
 
@@ -41,11 +41,7 @@ void draw()
 	backGround(0.9);
 	drawGrid(20);
 
-	wireFrameOn();
 	
-		drawCube(vec(-1, -1, -1), vec(1, 1, 1));
-
-	wireFrameOff();
 
 }
 
@@ -60,6 +56,9 @@ void mousePress(int b, int state, int x, int y)
 
 void mouseMotion(int x, int y)
 {
+
+
+	
 
 }
 

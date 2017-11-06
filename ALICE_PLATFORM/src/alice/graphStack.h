@@ -419,7 +419,7 @@ public:
 
 		glColor3f(0, 0, 0);
 		glLineWidth(1);
-			for (int i = 0; i < currentStackLayer; i++)PrintStack[i].display();// draw();//draw RC
+			for (int i = 0; i < currentStackLayer; i++)PrintStack[i].dilay();// draw();//draw RC
 			for (int i = 0; i < currentStackLayer; i++)PrintStack[i].draw(false);// draw();
 		glLineWidth(1);
 		

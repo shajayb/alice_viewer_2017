@@ -67,7 +67,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="src\polyClipper\clipper.cpp" />
-    <ClCompile Include="src\userSrc\sketch_empty\sketch_empty.cpp" />
+    <ClCompile Include="src\userSrc\examples\sketch_RenderMesh_example.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\alice\Controller.h" />
