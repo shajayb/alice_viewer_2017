@@ -41,6 +41,12 @@ void draw()
 	backGround(0.9);
 	drawGrid(20);
 
+	wireFrameOn();
+	
+		drawCube(vec(-1, -1, -1), vec(1, 1, 1));
+
+	wireFrameOff();
+
 }
 
 
