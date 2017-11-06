@@ -25,6 +25,10 @@ public:
 	GLfloat lm_normals_tris[MAX_CUBES * 72];
 	GLfloat lm_colors_tris[MAX_CUBES * 72];
 
+	GLfloat lm_positions_lines[_LM_VERTICES * 2];
+	int n_v_lines;
+	//GLuint line_indices[10000];
+	
 	//int polyCounts[_LM_FACECOUNTS_];
 	int n_v, n_f;
 	int n_v_tris, n_f_tris;
@@ -35,6 +39,8 @@ public:
 	RenderMesh()
 	{
 		n_v = n_f = 0;
+		n_v_tris = n_f_tris = 0;
+		n_v_lines = 0;
 	}
 
 	//////////////////////////////////////////////// utilities
@@ -90,6 +96,17 @@ public:
 
 		n_v += 3;
 		if (n_v > MAX_CUBES * 72)n_v = 0;
+	}
+
+	void addLineVertex(vec &P)
+	{
+		lm_positions_lines[n_v_lines + 0] = P.x * 1;
+		lm_positions_lines[n_v_lines + 1] = P.y * 1;
+		lm_positions_lines[n_v_lines + 2] = P.z * 1;
+		// positions
+		
+		n_v_lines += 3;
+		if (n_v_lines > _LM_VERTICES * 2)n_v_lines = 0;
 	}
 
 	void getVectorFromArray(int nv, vec &P, bool triArray = false)
@@ -153,6 +170,26 @@ public:
 				}
 
 				n_f_tris++;
+			}
+		}
+
+		for (int i = 0; i < M.n_e; i++)
+		{
+			if (M.edges[i].lFace == NULL || M.edges[i].rFace == NULL )
+			{
+				addLineVertex( M.positions[ M.edges[i].vStr->id ] );
+				addLineVertex( M.positions[ M.edges[i].vEnd->id ]);
+			}
+			else 
+			{
+				float ar;
+				vec n1 = M.edges[i].lFace->normal(M.positions, &ar);
+				vec n2 = M.edges[i].rFace->normal(M.positions, &ar);
+				if (n1.angle(n2) > 60)
+				{
+					addLineVertex(M.positions[M.edges[i].vStr->id]);
+					addLineVertex(M.positions[M.edges[i].vEnd->id]);
+				}
 			}
 		}
 
@@ -421,25 +458,46 @@ public:
 			if (color)glDisableClientState(GL_COLOR_ARRAY);
 		}
 
+
 	}
 
-	void draw( bool drawWire = false )
+	void drawFeatureEdges()
+	{
+		
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glVertexPointer(3, GL_FLOAT, 0, lm_positions_lines);
+
+			glDrawArrays(GL_LINES, 0, n_v_lines);
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+	}
+
+	void draw(bool drawFace = true,  bool drawWire = false , bool drawEdges = true)
 	{
 
 		glPushAttrib(GL_CURRENT_BIT);
 
+		if (drawEdges)
+		{
+			glColor3f(0, 0, 0);
+			glLineWidth(3);
+				drawFeatureEdges();
+			glLineWidth(1);
+		}
 
 		if (drawWire)
 		{
-			glLineWidth(2);
+			glLineWidth(1);
 			glColor3f(0, 0, 0);
 
-			wireFrameOn();
-				drawFaces(false);
-			wireFrameOff();
+				wireFrameOn();
+					drawFaces(false);
+				wireFrameOff();
+
+			glLineWidth(1);
 		}
 
-		drawFaces();
+		if (drawFace) drawFaces();
 
 		glPopMatrix();
 		glDisable(GL_LIGHTING);

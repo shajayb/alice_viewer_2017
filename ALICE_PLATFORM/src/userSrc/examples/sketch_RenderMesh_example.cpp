@@ -1,4 +1,4 @@
-#define _MAIN_
+
 
 #ifdef _MAIN_
 
@@ -21,13 +21,18 @@
 ///// ---------------------------------------------------------- MODEL ------------------------------
 
 RenderMesh RM;
-double lightScale = 1.0;
-bool flipNormals = true;
+double lightScale = 300.0;
+bool flipNormals = false;
+bool drawFaces = false;
+bool drawWire = false;
+bool drawEdges = true;
 
 void setup()
 {
 	Mesh M;
 	MeshFactory fac;
+	
+	/// create and add 6 meshes unto render stack - link0.obj - link5.obj
 	for ( int i = 0 ; i < 6 ; i ++)
 	{
 		string file = "data/link";
@@ -36,7 +41,7 @@ void setup()
 		itoa(i, s, 10);
 		file += s;
 		file += ".obj";
-		cout << file.c_str() << endl;
+		
 		M = fac.createFromOBJ( file, 1.0, false);
 		RM.addMesh(M);
 	}
@@ -45,6 +50,9 @@ void setup()
 	S.sliders[S.numSliders - 1].maxVal = 1500;
 
 	B.addButton(&flipNormals, "flipNormals");
+	B.addButton(&drawFaces, "drawFaces");
+	B.addButton(&drawWire, "drawWire");
+	B.addButton(&drawEdges, "drawEdges");
 
 }
 
@@ -74,7 +82,7 @@ void draw()
 
 	RM.updateColorArray(lightScale, flipNormals, camPt);
 
-	RM.draw(false);
+	RM.draw(drawFaces,drawWire,drawEdges);
 
 }
 
