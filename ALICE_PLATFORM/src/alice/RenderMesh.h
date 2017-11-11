@@ -44,6 +44,13 @@ public:
 	}
 
 	//////////////////////////////////////////////// utilities
+	void reset()
+	{
+		n_v = n_f = 0;
+		n_v_tris = n_f_tris = 0;
+		n_v_lines = 0;
+	}
+	
 	void lightsOn(GLfloat light_pos[4])
 	{
 		// set position and enable light0

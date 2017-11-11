@@ -46,9 +46,6 @@
     <ClCompile Include="src\userSrc\sketch_empty\sketch_empty.cpp">
       <Filter>sketches</Filter>
     </ClCompile>
-    <ClCompile Include="src\userSrc\examples\sketch_RenderMesh_example.cpp">
-      <Filter>sketches</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\alice\MODEL.h">
