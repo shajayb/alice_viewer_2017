@@ -1,4 +1,4 @@
-
+#define _MAIN_
 
 #ifdef _MAIN_
 
@@ -83,7 +83,7 @@ void draw()
 	RM.updateColorArray(lightScale, flipNormals, camPt);
 
 	RM.draw(drawFaces,drawWire,drawEdges);
-
+	RM.projectUntoGroundPlane();
 }
 
 
@@ -106,7 +106,7 @@ void mouseMotion(int x, int y)
 void keyPress(unsigned char k, int xm, int ym)
 {
 
-
+	if (k == 'p')RM.createGroundPlane();
 
 
 }
