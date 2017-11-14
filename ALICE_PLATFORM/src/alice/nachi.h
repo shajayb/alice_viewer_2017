@@ -7,7 +7,7 @@
 #include "ALICE_ROBOT_DLL.h"
 using namespace ROBOTICS;
 
-#include "graph.h"
+//#include "graph.h"
 #include "alice/Matrix3x3.h"
 
 class EndEffector
@@ -180,10 +180,10 @@ public:
 	Robot_Symmetric Nachi_tester;
 	EndEffector E;
 	EndEffector E_disp;
-	Graph taskGraph;
+//	Graph taskGraph;
 	Matrix4 fTrans;
 	Mesh M;
-	metaMesh MM;
+//	metaMesh MM;
 	////////////////////////////////////////////////////////////////////////// CLASS METHODS 
 
 	pathImporter()
@@ -198,10 +198,21 @@ public:
 		for (int i = 0; i < E.M.n_v; i++)E.M.positions[i] = EE * E.M.positions[i];// to tcip
 
 		actualPathLength = 0;
-		taskGraph = *new Graph();
-		taskGraph.reset();
+		//taskGraph = *new Graph();
+		//taskGraph.reset();
 
 		reachable = new bool[maxPts];
+
+		//////
+
+
+		//Bars[0] = Link(034.5, 05.0, 90., 0.); //1 l-axis = blue -> next axis = red, bcos alpha = 90
+		//Bars[1] = Link(0.000, 33.0, 0., 90.);//2 l-axis = red ->  next axis = red bcos alpha = 0
+		//Bars[2] = Link(0.000, 04.5, 90., 0.);//3 l-axis = red ->  next axis = blue bcos alpha = 90
+		//Bars[3] = Link(034.0, .000, -90., 0.);//4 l-axis = blue
+		//Bars[4] = Link(0.000, .000, 90., 00.);//5 l-axis = blue
+		//Bars[5] = Link(007.3, .000, 00., 00.);//6 l-axis = blue
+
 	}
 	void readPath(string fileToRead = "data/path.txt", string delimiter = ",", float inc = 0)
 	{
@@ -245,125 +256,11 @@ public:
 		getBoundingBox();
 
 		//	checkReach();
-		copyPathToGraph();
+		//copyPathToGraph();
 
 	}
 
-	void readOBJ(string fileToRead = "data/path.txt" , float zHt = 0.2 , double spacing = 1.0, double distTol = 0.05)
-	{
-		
-		MeshFactory fac;
-		M = fac.createFromOBJ(fileToRead, 100.0, false);
-
-		cout << " nachi" << fileToRead << endl;
-		{
-			vec minV, maxV;
-			Matrix3x3 PCA_mat;
-			vec mean, eigenValues, eigenvecs[3];
-			PCA_mat.PCA(M.positions, M.n_v, mean, eigenValues, eigenvecs);
-			M.boundingBox(minV, maxV);
-
-			for (int i = 0; i < M.n_v; i++)
-				M.positions[i] -= (minV + maxV)*0.5;
-			
-			vec x = eigenvecs[0].normalise();
-			if( fabs(x.x) > 0.1 && x.y > 0.1)
-			{
-				
-				x.z = 0;
-				vec z = vec(0, 0, 1);
-				vec y = x.cross(z).normalise();
-
-				Matrix3 trans;
-				trans.setColumn(0, x);
-				trans.setColumn(1, y);
-				trans.setColumn(2, z);
-				trans.transpose();
-
-				for (int i = 0; i < M.n_v; i++)
-					M.positions[i] = trans * M.positions[i];
-
-			}
-
-		}
-
-		cout << "invert done" << endl;
-		////////////////////////////////////////////////////////////////////////// transform to base plate
-		{
-			vec x, y, z, cen;
-			cen = vec(53.9327, -2.2114, -17.4015);
-			x = vec(1, 0, 0).normalise();
-			z = vec(0, 0, -1);
-			y = x.cross(z);
-
-			Matrix4 fTrans;
-			fTrans.identity();
-			fTrans.setColumn(0, x.normalise());
-			fTrans.setColumn(1, y.normalise());
-			fTrans.setColumn(2, z.normalise());
-			fTrans.setColumn(3, cen);
-
-
-			for (int i = 0; i < M.n_v; i++)
-				M.positions[i] = fTrans * M.positions[i];
-
-			vec minV, maxV;
-			M.boundingBox(minV, maxV);
-			double diff = cen.z - minV.z;
-
-
-			for (int i = 0; i < M.n_v; i++)
-				M.positions[i].z += diff;
-		}
-		cout << "trans done" << endl;
-		//////////////////////////////////////////////////////////////////////////
-		metaMesh MM(M);;
-
-		MM.assignScalars("z");
-		double minZ, maxZ;
-		//MM.getMinMaxOfScalarField(minZ, maxZ);
-
-		minZ = -17.4015; maxZ = 0;
-		///////////
-		double z = 0; 
-		actualPathLength = 0;
-		vec refPt_renumber;
-		vector<vec> startPts;
-		for (double  z = minZ ; z < maxZ; z+= zHt )
-		{
-			MM.createIsoContourGraph(z);
-			
-			cout << z << endl;
-				if (!MM.G.n_v > 0)continue;
-			cout << MM.G.n_v << endl;
-
-			MM.G.computeIslandsAsEdgeAndVertexList();
-			MM.convertContourToToroidalGraph();
-			MM.G.redistribute_toroidal(spacing * 0.5);
-
-			int iterations = 0;
-			//while (fabs(MM.G.averageEdgeLenght() - spacing) < distTol && iterations < 1000)
-			{
-				for (int i = 0; i < 10; i++)MM.G.smoothGraph(10);
-					
-				//iterations++;
-			}
-
-			// renumber
-			if (z == minZ)refPt_renumber = MM.G.positions[0];
-			refPt_renumber.z = z;
-			MM.G.renumber(refPt_renumber);
-			
-			for (int i = 0; i < MM.G.n_v; i++)addPoint(MM.G.positions[i]);
-			startPts.push_back(MM.G.positions[0]);
-		}
-
-		for (int i = 0; i < startPts.size(); i++)
-			printf("%1.2f,%1.2f,%1.2f \n", startPts[i].x, startPts[i].y, startPts[i].z);
-
-		//////////////////////////////////////////////////////////////////////////
-		for (int i = 0; i < actualPathLength; i++)reachable[i] = true;
-	}
+	
 	////////////////////////////////////////////////////////////////////////// UTILITY METHODS
 
 	vec extractVecFromStringArray(int id, vector<string> &content)
@@ -410,13 +307,13 @@ public:
 		actualPathLength++;
 		if (actualPathLength > maxPts)actualPathLength = 0;
 	}
-	void copyPathToGraph()
+	/*void copyPathToGraph()
 	{
 		for (int i = 0; i < actualPathLength; i++)
 			taskGraph.createVertex(path[i][0]);
 		for (int i = 0; i < actualPathLength; i++)
 			taskGraph.createEdge(taskGraph.vertices[taskGraph.Mod(i, actualPathLength)], taskGraph.vertices[taskGraph.Mod(i + 1, actualPathLength)]);
-	}
+	}*/
 	void getToolLocation(int id, Matrix4 &TOOL)
 	{
 		TOOL.setColumn(0, path[id][1]); // tcp_x
@@ -763,6 +660,29 @@ public:
 
 
 	////////////////////////////////////////////////////////////////////////// DISPLAY METHODS
+	
+	void transformRobotMeshes()
+	{
+		Matrix4 transformMatrix;
+		
+		
+		for (int i = 0; i < DOF; i++)
+		{
+			if (i > 4)continue;
+
+			transformMatrix = Nachi_tester.Bars_to_world_matrices[i];
+			for (int j = 0; j < Nachi_tester.link_meshes[i].n_v; j++)Nachi_tester.link_meshes[i].positions[j] = transformMatrix * Nachi_tester.link_meshes[i].positions[j];
+		}
+
+		// transform meshes to local frame
+		
+	}
+
+	void invertTransformRobotMeshes()
+	{
+		Nachi_tester.invertTransformMeshesToLocal();
+	}
+	
 	void drawHistograms( int j ,vec cen = vec (50, winH - 50,0), float r = 5.0)
 	{
 		AL_glLineWidth(1);
@@ -847,7 +767,7 @@ public:
 		// ------------------- draw Robot ;
 
 		if (wireFrame)wireFrameOn();
-			Nachi_tester.draw(false); // updates AO render points ;
+			//Nachi_tester.draw(true); // updates AO render points ;
 		if (wireFrame)wireFrameOff();
 
 		if (showSphere) glutSolidSphere(78, 32, 32);
