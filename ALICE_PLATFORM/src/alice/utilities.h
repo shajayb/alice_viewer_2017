@@ -297,7 +297,29 @@ void drawMatrix(Matrix4 &T, vec str)
 }
 
 
-void drawFrame(Matrix4 &t)
+void assignDefaultFrame(Matrix4 &T)
+{
+
+	T.setColumn(0, vec(-1, 0, 0));
+	T.setColumn(1, vec(0, 1, 0));
+	T.setColumn(2, vec(0, 0, -1));
+	for (int i = 0; i < 3; i++)T.setColumn(i, T.getColumn(i).normalise());
+
+}
+
+void normaliseFrame(Matrix4 &T)
+{
+	for (int i = 0; i < 3; i++)T.setColumn(i, T.getColumn(i).normalise());
+}
+
+void angleBetweenFrames(Matrix3 rotA, Matrix3 rotB)
+{
+	for (int i = 0; i < 3; i++)
+		cout << rotA.getColumn(i).angle(rotB.getColumn(i)) << " ";
+	cout << endl;
+}
+
+void drawFrame(Matrix4 &t , float sz = 1)
 {
 
 	vec u, v, n, c;
@@ -310,9 +332,9 @@ void drawFrame(Matrix4 &t)
 	drawPoint(c);
 	glPointSize(1);
 
-	glColor3f(1, 0, 0); drawLine(c, c + u);
-	glColor3f(0, 1, 0); drawLine(c, c + v);
-	glColor3f(0, 0, 1); drawLine(c, c + n);
+	glColor3f(1, 0, 0); drawLine(c, c + u * sz);
+	glColor3f(0, 1, 0); drawLine(c, c + v * sz);
+	glColor3f(0, 0, 1); drawLine(c, c + n * sz);
 
 }
 

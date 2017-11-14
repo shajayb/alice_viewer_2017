@@ -15,70 +15,45 @@ class EndEffector
 public:
 
 	Mesh M;
-	Robot_Symmetric Nachi_tester;
-	vec XA_f, YA_f, ZA_f;
-	vec XA, YA, ZA;
-	vec cen, cen_f;
-	Matrix3 rot, rotf;
-	Matrix4 transformMatrix;
+	Matrix4 T_w0, T_ew, T_e0, T_ew_in, T_e0_in, T_w0_inv;
 
 	EndEffector() {};
-	EndEffector(string file)
+	EndEffector(string file , Matrix4 T_wrist)
 	{
 		MeshFactory fac;
 		M = fac.createFromOBJ(file, 1, false);
-		invertMeshToLocal();
-
-		int i, j, k;
-		i = 5;
-		j = 7;
-		k = 11;
-
-		//invertTCP_toLocalOrigin();
+		setup(T_wrist);
 	}
 
-	void invertTCP_toLocalOrigin()
+	void setup( Matrix4 T_wrist)
 	{
-		//
-		vec cen = (M.positions[5] + M.positions[1]) * 0.5;
-		vec xAxis = M.positions[5] - M.positions[3];
-		vec yAxis = M.positions[1] - M.positions[3];
-		vec zAxis = xAxis.cross(yAxis);
-		Matrix4 T;
-		T.setColumn(0, xAxis.normalise() * -1);
-		T.setColumn(1, yAxis.normalise() * 1);
-		T.setColumn(2, zAxis.normalise()* -1);
-		T.setColumn(3, cen);
-		T.invert();
+		T_w0 = T_wrist;
+		normaliseFrame(T_w0);
 
-		for (int i = 0; i < M.n_v; i++)M.positions[i] = T * M.positions[i];
+		// assumes vector vtx1-vtx0 points in positive X, and vtx2 - vtx0, points in positive Y;
+		// *-1 adjustment is to get the EE to point upward. This is internal adjustment, not to be changed.
+		T_e0.setColumn(0, (M.positions[1] - M.positions[0]).normalise() * -1);
+		T_e0.setColumn(1, (M.positions[2] - M.positions[0]).normalise());
+		T_e0.setColumn(2, T_e0.getColumn(0).cross(T_e0.getColumn(1)).normalise());
+		T_e0.setColumn(3, M.positions[0]);
+
+		T_e0_in = T_e0;
+		T_e0_in.invert();
+
+		T_w0_inv = T_w0;
+		T_w0_inv.invert();
+		T_ew = T_w0_inv * T_e0;
+
+		T_ew_in = T_ew;
+		T_ew_in.invert();
+
+		//////////////////////////////////////////////////////////////////////////
+		for (int i = 0; i < M.n_v; i++)M.positions[i] = T_w0_inv * M.positions[i];
 	}
-
-	void invertMeshToLocal()
+	
+	Matrix4 inverseTransformTool( Matrix4 TOOL )
 	{
-		Nachi_tester.ForwardKineMatics(Nachi_tester.rot);
-
-		transformMatrix = Nachi_tester.Bars_to_world_matrices[5];
-
-		XA_f = transformMatrix.getColumn(0).normalise();
-		YA_f = transformMatrix.getColumn(1).normalise();
-		ZA_f = transformMatrix.getColumn(2).normalise();
-		cen_f = transformMatrix.getColumn(3);
-
-		cen = (M.positions[1] + M.positions[5]) * 0.5;
-
-		YA = M.positions[5] - M.positions[7];
-		XA = M.positions[1] - M.positions[7];
-		//XA *= -1;
-		ZA = YA.cross(XA);
-
-		XA.normalise();
-		YA.normalise();
-		ZA.normalise();
-
-		rot.setColumn(0, XA); rotf.setColumn(0, XA_f);
-		rot.setColumn(1, YA);  rotf.setColumn(1, YA_f);
-		rot.setColumn(2, ZA); rotf.setColumn(2, ZA_f);
+		return ( TOOL * T_ew_in );
 	}
 
 	void drawAtLocation(Matrix4 &EE, bool wireframe = true)
@@ -144,18 +119,18 @@ public:
 		drawString(s, M.positions[i]);
 
 
-		glColor3f(1, 0, 0); drawLine(cen, cen + XA);
-		glColor3f(0, 1, 0); drawLine(cen, cen + YA);
-		glColor3f(0, 0, 1); drawLine(cen, cen + ZA);
+		//glColor3f(1, 0, 0); drawLine(cen, cen + XA);
+		//glColor3f(0, 1, 0); drawLine(cen, cen + YA);
+		//glColor3f(0, 0, 1); drawLine(cen, cen + ZA);
 
-		glColor3f(1, 0, 0); drawLine(cen_f, cen_f + XA_f);
-		glColor3f(0, 1, 0); drawLine(cen_f, cen_f + YA_f);
-		glColor3f(0, 0, 1); drawLine(cen_f, cen_f + ZA_f);
+		//glColor3f(1, 0, 0); drawLine(cen_f, cen_f + XA_f);
+		//glColor3f(0, 1, 0); drawLine(cen_f, cen_f + YA_f);
+		//glColor3f(0, 0, 1); drawLine(cen_f, cen_f + ZA_f);
 
 	}
 };
 
-
+//
 // derive your class from a base / existing class 
 class pathImporter :public importer
 {
@@ -177,41 +152,30 @@ public:
 	int currentPointId = 0;
 
 	//
-	Robot_Symmetric Nachi_tester;
+	Robot_Symmetric Nachi;
 	EndEffector E;
-	EndEffector E_disp;
-//	Graph taskGraph;
+	Matrix4 TOOL, TOOL_req;
+
 	Matrix4 fTrans;
-	Mesh M;
-//	metaMesh MM;
+	//Mesh M;
+
 	////////////////////////////////////////////////////////////////////////// CLASS METHODS 
 
-	pathImporter()
+	pathImporter( string file_EndEffector = "data/end_effector.obj" )
 	{
 		currentPointId = 0;
-		Nachi_tester.addMeshes();
-		E = *new EndEffector("data/EE_disp.obj");
-		E_disp = *new EndEffector("data/EE_disp.obj");
+		Nachi.addMeshes();
 
-		Matrix4 EE = E.transformMatrix;
-		EE.invert();
-		for (int i = 0; i < E.M.n_v; i++)E.M.positions[i] = EE * E.M.positions[i];// to tcip
+		//
 
+		Nachi.ForwardKineMatics(Nachi.rot);
+		Nachi.ForwardKineMatics(Nachi.rot);
+		//
+
+		E = *new EndEffector(file_EndEffector, Nachi.Bars_to_world_matrices[5]);
+		//
 		actualPathLength = 0;
-		//taskGraph = *new Graph();
-		//taskGraph.reset();
-
 		reachable = new bool[maxPts];
-
-		//////
-
-
-		//Bars[0] = Link(034.5, 05.0, 90., 0.); //1 l-axis = blue -> next axis = red, bcos alpha = 90
-		//Bars[1] = Link(0.000, 33.0, 0., 90.);//2 l-axis = red ->  next axis = red bcos alpha = 0
-		//Bars[2] = Link(0.000, 04.5, 90., 0.);//3 l-axis = red ->  next axis = blue bcos alpha = 90
-		//Bars[3] = Link(034.0, .000, -90., 0.);//4 l-axis = blue
-		//Bars[4] = Link(0.000, .000, 90., 00.);//5 l-axis = blue
-		//Bars[5] = Link(007.3, .000, 00., 00.);//6 l-axis = blue
 
 	}
 	void readPath(string fileToRead = "data/path.txt", string delimiter = ",", float inc = 0)
@@ -235,7 +199,7 @@ public:
 			fs.getline(str, 2000);
 			vector<string> content = splitString(str, ",");
 
-			assignDefaultFrame();
+			assignDefaultValues();
 
 			if (content.size() >= 3)tcp = extractVecFromStringArray(0, content) * 1.0;
 			if (content.size() >= 6)tcp_x = extractVecFromStringArray(3, content).normalise() * 1;
@@ -244,7 +208,7 @@ public:
 
 			//tcp.x += 5.0;
 			tcp.z += inc;
-			addPoint(tcp);
+			addPoint(tcp,tcp_x,tcp_y,tcp_z);
 		}
 
 		fs.close();
@@ -267,7 +231,7 @@ public:
 	{
 		return vec(atof(content[id].c_str()), atof(content[id + 1].c_str()), atof(content[id + 2].c_str()));
 	}
-	void assignDefaultFrame()
+	void assignDefaultValues()
 	{
 		tcp = vec(0, 0, 0);
 		tcp_x = vec(-1, 0, 0);
@@ -291,13 +255,7 @@ public:
 			min.z = MIN(tcp.z, min.z);
 		}
 	}
-	void angleBetweenFrames(Matrix3 rotA, Matrix3 rotB)
-	{
-		for (int i = 0; i < 3; i++)
-			cout << rotA.getColumn(i).angle(rotB.getColumn(i)) << " ";
-		cout << endl;
-	}
-	void addPoint(vec tcp, vec tcp_x = vec(1, 0, 0), vec tcp_y = vec(0, 1, 0), vec tcp_z = vec(0, 0, -1))
+	void addPoint(vec tcp, vec tcp_x , vec tcp_y , vec tcp_z )
 	{
 
 		path[actualPathLength][0] = tcp;
@@ -307,13 +265,6 @@ public:
 		actualPathLength++;
 		if (actualPathLength > maxPts)actualPathLength = 0;
 	}
-	/*void copyPathToGraph()
-	{
-		for (int i = 0; i < actualPathLength; i++)
-			taskGraph.createVertex(path[i][0]);
-		for (int i = 0; i < actualPathLength; i++)
-			taskGraph.createEdge(taskGraph.vertices[taskGraph.Mod(i, actualPathLength)], taskGraph.vertices[taskGraph.Mod(i + 1, actualPathLength)]);
-	}*/
 	void getToolLocation(int id, Matrix4 &TOOL)
 	{
 		TOOL.setColumn(0, path[id][1]); // tcp_x
@@ -327,93 +278,27 @@ public:
 		getToolLocation(id, _TOOL);
 		return _TOOL;
 	}
-	void changeTool(Matrix4 EE, Matrix4 &TOOL, int n)
-	{
-		vec x = E_disp.XA;
-		vec y = E_disp.YA;
-		vec z = E_disp.ZA;
-		vec cen = E_disp.cen;
-
-		vec xf = E_disp.XA_f;
-		vec yf = E_disp.YA_f;
-		vec zf = E_disp.ZA_f;
-		vec cenf = E_disp.cen_f;
-
-
-		////  ------------------ inert to origin ;
-
-		Matrix3 trans = E_disp.rot;
-		trans.transpose();
-
-		x = trans * x; y = trans * y; z = trans * z;
-		xf = trans * xf; yf = trans * yf; zf = trans * zf;
-
-		Matrix4 T;
-		T.identity();
-		T.setColumn(3, cen);
-		T.invert();
-		cenf = T * cenf;
-		cen = T * cen;
-		cenf = cen + z.normalise() * 20.85;
-
-
-		// -------------- forward to tool location
-		trans.setColumn(0, EE.getColumn(0).normalise());
-		trans.setColumn(1, EE.getColumn(1).normalise());
-		trans.setColumn(2, EE.getColumn(2).normalise());
-
-		x = trans * x; y = trans * y; z = trans * z;
-		xf = trans * xf; yf = trans * yf; zf = trans * zf;
-
-		T.identity();
-		T.setColumn(3, EE.getColumn(3));
-		//cenf += EE.getColumn(3);
-		cen += EE.getColumn(3);
-		cenf = cen - z.normalise() * 20.85;
-
-		TOOL.setColumn(0, xf.normalise());
-		TOOL.setColumn(1, yf.normalise());
-		TOOL.setColumn(2, zf.normalise());
-		TOOL.setColumn(3, cenf);
-	}
 	void goToNextPoint()
 	{
-		Matrix4 TOOL, EE;
-		EE = TOOL = getToolLocation(currentPointId);
-
-		changeTool(EE, TOOL, currentPointId);
+		TOOL = getToolLocation(currentPointId);
+ 		TOOL_req =  E.inverseTransformTool(TOOL);
 
 		double rot_prev[6];
-		for (int i = 0; i < 6; i++)rot_prev[i] = Nachi_tester.rot[i];
+		for (int i = 0; i < 6; i++)rot_prev[i] = Nachi.rot[i];
 
-		Nachi_tester.inverseKinematics_analytical(TOOL, false);
+		Nachi.inverseKinematics_analytical(TOOL_req, false);
 
 		//angleCorrection(rot_prev);
 
-		vec pt = Nachi_tester.ForwardKineMatics(Nachi_tester.rot);
-
-		//cout << rot_prev[3] - Nachi_tester.rot[3] << " J3 diff " << endl;
-		//cout << rot_prev[3] << " J3_prev " << endl;
-
-
-		//cout << " -- current point -- " << currentPointId << endl;
-		vec ax, ay, az;
-		ax = Nachi_tester.Bars_to_world_matrices[5].getColumn(0);
-		ay = Nachi_tester.Bars_to_world_matrices[5].getColumn(1);
-		az = Nachi_tester.Bars_to_world_matrices[5].getColumn(2);
-		//cout << pt.mag() << " lenghth " << endl;
-
-		//cout << ax.angle(TOOL.getColumn(0)) << endl;
-		//cout << ay.angle(TOOL.getColumn(1)) << endl;
-		//cout << az.angle(TOOL.getColumn(2)) << endl;
-		vec tcp_ret = Nachi_tester.Bars_to_world_matrices[5].getColumn(3);
-	//	cout << Nachi_tester.joints[5].distanceTo(TOOL.getColumn(3)) << " in-out - tcp diff " << endl;
+		Nachi.ForwardKineMatics(Nachi.rot);
 
 
 		currentPointId++;
 		if (currentPointId >= actualPathLength - 1)currentPointId = 0;
 
 	}
+
+
 
 	////////////////////////////////////////////////////////////////////////// COMPUTE METHODS
 
@@ -438,19 +323,12 @@ public:
 	}
 	void checkPathForReachability()
 	{
-		Matrix4 TOOL, EE;
-		vec pt;
+
+		currentPointId = 0;
 		for (int i = 0; i < actualPathLength - 1; i++)
 		{
 			// get TOOL information at current point i
-			EE = TOOL = getToolLocation(i);
-
-			changeTool(EE, TOOL, i);
-
-			double rot_prev[6];
-			for (int i = 0; i < 6; i++)rot_prev[i] = Nachi_tester.rot[i];
-
-			Nachi_tester.inverseKinematics_analytical(TOOL, false);
+			goToNextPoint();
 
 			//-170	170
 			//	65 - 150
@@ -459,7 +337,7 @@ public:
 			//	- 109.106	109.106
 			////	360.001 - 360.001
 
-			angleCorrection(rot_prev);
+			//angleCorrection(rot_prev);
 
 
 			//Nachi_tester.rot[0] = ofClamp(Nachi_tester.rot[0], -170, 170);
@@ -469,50 +347,21 @@ public:
 			//Nachi_tester.rot[4] = ofClamp(Nachi_tester.rot[4], -109, 109);
 			//Nachi_tester.rot[5] = ofClamp(Nachi_tester.rot[5], -360, 360);
 
-			pt = Nachi_tester.ForwardKineMatics(Nachi_tester.rot);
-
-
-
-			// test if current TOOL location is reachable
-			reachable[i] = true;
-			if (pt.distanceTo(TOOL.getColumn(3)) > 1e-04)
-			{
-				//printf(" point id %i is unreachable \n", i);
-				reachable[i] = false;
-			}
-
-			/////// check if tool orinetationis the same as input 
-
-			vec ax, ay, az;
-			ax = Nachi_tester.Bars_to_world_matrices[5].getColumn(0);
-			ay = Nachi_tester.Bars_to_world_matrices[5].getColumn(1);
-			az = Nachi_tester.Bars_to_world_matrices[5].getColumn(2);
-
-		//	cout << " -- current point -- " << i << endl;
-			//if (fabs(ax.angle(TOOL.getColumn(0))) > 1e-04) printf(" point id %i axis ax & tcp_x do not match within tolernace \n", i);
-			//if (fabs(ay.angle(TOOL.getColumn(1))) > 1e-04) printf(" point id %i axis ay & tcp_y do not match within tolernace \n", i);
-			//if (fabs(az.angle(TOOL.getColumn(2))) > 1e-04) printf(" point id %i axis az & tcp_z do not match within tolernace \n", i);
-
-			//// test if current TOOL orientation axes are ortho-normal / perpendicular to each other
-			//if (TOOL.getColumn(0)*TOOL.getColumn(1) > 1e-04)printf(" point id %i axis x & y are not ortho-normal \n", i);
-			//if (TOOL.getColumn(1)*TOOL.getColumn(2) > 1e-04)printf(" point id %i axis y & z are not ortho-normal \n", i);
-			//if (TOOL.getColumn(2)*TOOL.getColumn(0) > 1e-04)printf(" point id %i axis z & x are not ortho-normal \n", i);
-
 			// store corresponding rotations at each point along path
 			// for later use such as gcode export & graph-generation etc.
-			for (int n = 0; n < 6; n++)rotations[i][n] = Nachi_tester.rot[n];
+			for (int n = 0; n < 6; n++)rotations[i][n] = Nachi.rot[n];
 
 		}
 
 	}
 	void angleCorrection(double * rot_prev)
 	{
-		if (fabs(rot_prev[3] - Nachi_tester.rot[3]) > 180)
+		if (fabs(rot_prev[3] - Nachi.rot[3]) > 180)
 		{
 		//	cout << Nachi_tester.rot[3] << " J3_fk " << endl;
 
-			if (rot_prev[3] < 0 && Nachi_tester.rot[3] > 0) Nachi_tester.rot[3] -= 360;
-			if (rot_prev[3] > 0 && Nachi_tester.rot[3] < 0) Nachi_tester.rot[3] += 360;
+			if (rot_prev[3] < 0 && Nachi.rot[3] > 0) Nachi.rot[3] -= 360;
+			if (rot_prev[3] > 0 && Nachi.rot[3] < 0) Nachi.rot[3] += 360;
 
 		//	cout << Nachi_tester.rot[3] << " J3_new " << endl;
 		}
@@ -520,14 +369,14 @@ public:
 	//	cout << Nachi_tester.rot[3] << " J4_new_after " << endl;
 
 
-		if (fabs(rot_prev[5] - Nachi_tester.rot[5]) > 180)
+		if (fabs(rot_prev[5] - Nachi.rot[5]) > 180)
 		{
 
 			//cout << rot_prev[5] << " J5_prev " << endl;
 			//cout << Nachi_tester.rot[5] << " J5_fk " << endl;
 
-			if (rot_prev[5] < 0 && Nachi_tester.rot[5] > 0) Nachi_tester.rot[5] -= 360;
-			if (rot_prev[5] > 0 && Nachi_tester.rot[5] < 0) Nachi_tester.rot[5] += 360;
+			if (rot_prev[5] < 0 && Nachi.rot[5] > 0) Nachi.rot[5] -= 360;
+			if (rot_prev[5] > 0 && Nachi.rot[5] < 0) Nachi.rot[5] += 360;
 
 			//cout << Nachi_tester.rot[5] << " J5_new " << endl;
 		}
@@ -660,29 +509,32 @@ public:
 
 
 	////////////////////////////////////////////////////////////////////////// DISPLAY METHODS
-	
 	void transformRobotMeshes()
 	{
 		Matrix4 transformMatrix;
-		
-		
+
+
 		for (int i = 0; i < DOF; i++)
 		{
 			if (i > 4)continue;
 
-			transformMatrix = Nachi_tester.Bars_to_world_matrices[i];
-			for (int j = 0; j < Nachi_tester.link_meshes[i].n_v; j++)Nachi_tester.link_meshes[i].positions[j] = transformMatrix * Nachi_tester.link_meshes[i].positions[j];
+			transformMatrix = Nachi.Bars_to_world_matrices[i];
+			for (int j = 0; j < Nachi.link_meshes[i].n_v; j++)Nachi.link_meshes[i].positions[j] = transformMatrix * Nachi.link_meshes[i].positions[j];
 		}
 
-		// transform meshes to local frame
-		
+		// transform meshes EE --> world
+		for (int i = 0; i < E.M.n_v; i++)E.M.positions[i] = Nachi.Bars_to_world_matrices[5] * E.M.positions[i];// to tcip
+
 	}
 
 	void invertTransformRobotMeshes()
 	{
-		Nachi_tester.invertTransformMeshesToLocal();
+		Nachi.invertTransformMeshesToLocal();
+
+		Matrix4 tw = Nachi.Bars_to_world_matrices[5];
+		tw.invert();
+		for (int i = 0; i < E.M.n_v; i++)E.M.positions[i] = tw * E.M.positions[i];// to tcip
 	}
-	
 	void drawHistograms( int j ,vec cen = vec (50, winH - 50,0), float r = 5.0)
 	{
 		AL_glLineWidth(1);
@@ -701,7 +553,7 @@ public:
 
 
 		//glBegin(GL_LINES);
-			for (int i = 0; i < actualPathLength - 1; i+= 10 )
+			for (int i = 0; i < actualPathLength - 1; i+= 1 )
 			{
 				double ang = ((PI * 2.0 / actualPathLength) * float(i)) * 1.0;
 				vec4 clr = getColour(rotations[i][j], mn, mx);
@@ -717,17 +569,7 @@ public:
 
 		restore3d();
 	}
-	void drawFrame(Matrix4 &tool, float sz)
-	{
-
-		tcp = tool.getColumn(3);
-		tcp_x = tool.getColumn(0); tcp_y = tool.getColumn(1); tcp_z = tool.getColumn(2);
-
-		glColor3f(1, 0, 0); drawLine(tcp, tcp + tcp_x.normalise() * sz);
-		glColor3f(0, 1, 0); drawLine(tcp, tcp + tcp_y.normalise() * sz);
-		glColor3f(0, 0, 1); drawLine(tcp, tcp + tcp_z.normalise() * sz);
-	}
-	void draw(bool wireFrame = true, bool showSphere = false)
+	void draw(bool drawRobot = true , bool drawEndEffector = true)
 	{
 		// ------------------- taskGraph
 		//taskGraph.draw();
@@ -755,22 +597,30 @@ public:
 		//////////////////////////////////////////////////////////////////////////
 		// get TOOL information at current point i
 
-		Matrix4 EE = Nachi_tester.Bars_to_world_matrices[5];
-		E.drawAtLocation(EE);
+		if (drawEndEffector)
+		{
+			Matrix4 EE = Nachi.Bars_to_world_matrices[5];
+			E.drawAtLocation(EE);
 
+			drawFrame(TOOL_req, 3);
+			drawCircle(TOOL_req.getColumn(3), 3, 32);
+			drawFrame(TOOL, 3);
+		}
+
+	
 		//////////////////////////////////////////////////////////////////////////
 		// ------------------- draw bounding box ;
 
 		wireFrameOn();
 			drawCube(min, max);
 		wireFrameOff();
+
 		// ------------------- draw Robot ;
 
-		if (wireFrame)wireFrameOn();
-			//Nachi_tester.draw(true); // updates AO render points ;
-		if (wireFrame)wireFrameOff();
+		if (drawRobot)Nachi.draw();
 
-		if (showSphere) glutSolidSphere(78, 32, 32);
+
+
 
 		for (int i = 0; i < 6; i++)
 			drawHistograms(i, vec( i*200 + 150 , winH - 300,0),75);

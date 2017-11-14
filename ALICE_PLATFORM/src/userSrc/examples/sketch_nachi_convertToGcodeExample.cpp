@@ -1,4 +1,5 @@
-#define _MAIN_
+
+
 
 #ifdef _MAIN_
 
@@ -41,19 +42,19 @@ void setup()
 
 
 	S = *new SliderGroup();
-	S.addSlider(&path.Nachi_tester.rot[0], "J1");
-	S.addSlider(&path.Nachi_tester.rot[1], "J2");
-	S.addSlider(&path.Nachi_tester.rot[2], "J3");
-	S.addSlider(&path.Nachi_tester.rot[3], "J4");
-	S.addSlider(&path.Nachi_tester.rot[4], "J5");
-	S.addSlider(&path.Nachi_tester.rot[5], "J6");
+	S.addSlider(&path.Nachi.rot[0], "J1");
+	S.addSlider(&path.Nachi.rot[1], "J2");
+	S.addSlider(&path.Nachi.rot[2], "J3");
+	S.addSlider(&path.Nachi.rot[3], "J4");
+	S.addSlider(&path.Nachi.rot[4], "J5");
+	S.addSlider(&path.Nachi.rot[5], "J6");
 
-	S.sliders[0].attachToVariable(&path.Nachi_tester.rot[0], -170, 170);
-	S.sliders[1].attachToVariable(&path.Nachi_tester.rot[1], -170, 170);
-	S.sliders[2].attachToVariable(&path.Nachi_tester.rot[2], -170, 170);
-	S.sliders[3].attachToVariable(&path.Nachi_tester.rot[3], -170, 170);
-	S.sliders[4].attachToVariable(&path.Nachi_tester.rot[4], -170, 170);
-	S.sliders[5].attachToVariable(&path.Nachi_tester.rot[5], -170, 170);
+	S.sliders[0].attachToVariable(&path.Nachi.rot[0], -170, 170);
+	S.sliders[1].attachToVariable(&path.Nachi.rot[1], -170, 170);
+	S.sliders[2].attachToVariable(&path.Nachi.rot[2], -170, 170);
+	S.sliders[3].attachToVariable(&path.Nachi.rot[3], -170, 170);
+	S.sliders[4].attachToVariable(&path.Nachi.rot[4], -170, 170);
+	S.sliders[5].attachToVariable(&path.Nachi.rot[5], -170, 170);
 
 
 	S.addSlider(&lightScale, "lightScale");
@@ -67,20 +68,20 @@ void setup()
 
 void update(int value)
 {
-	path.Nachi_tester.ForwardKineMatics(path.Nachi_tester.rot);
+	path.Nachi.ForwardKineMatics(path.Nachi.rot);
 
 
 	{
 		RM.reset();
 		path.transformRobotMeshes();
 
-		//RM.addMesh(path.Nachi_tester.base);
+		//RM.addMesh(path.Nachi.base);
 		
 		for (int i = 0; i < 5; i++)
 		{
-
-			RM.addMesh(path.Nachi_tester.link_meshes[i]);
+			RM.addMesh(path.Nachi.link_meshes[i]);
 		}
+		RM.addMesh(path.E.M);
 
 		path.invertTransformRobotMeshes();
 	}
@@ -101,7 +102,7 @@ void draw()
 	backGround(0.75);
 	drawGrid(20);
 
-	path.draw(false,false);
+	path.draw();
 	RM.draw(drawFaces, drawWire, drawEdges);
 
 	sprintf_s(s, " current point id : %i", path.currentPointId);
@@ -160,12 +161,12 @@ void keyPress(unsigned char k, int xm, int ym)
 		{
 			//for ( int j = 0 ; j < 4 ; j++)
 			{
-				path.Nachi_tester.Bars[i].print();
+				path.Nachi.Bars[i].print();
 
 			}
 		}
 		
-		cout << path.Nachi_tester.Bars[5].d << endl;
+		cout << path.Nachi.Bars[5].d << endl;
 	}
 }
 
