@@ -19,24 +19,36 @@ namespace igl
   // Write a mesh in an ascii obj file
   // Inputs:
   //   str  path to outputfile
-  //   V  eigen double matrix #V by 3 (mesh vertices)
-  //   F  eigen int matrix #F by 3 (mesh indices)
+  //   V  #V by 3 mesh vertex positions
+  //   F  #F by 3|4 mesh indices into V
+  //   CN #CN by 3 normal vectors
+  //   FN  #F by 3|4 corner normal indices into CN
+  //   TC  #TC by 2|3 texture coordinates
+  //   FTC #F by 3|4 corner texture coord indices into TC
   // Returns true on success, false on error
+  //
+  // Known issues: Horrifyingly, this does not have the same order of
+  // parameters as readOBJ.
+  template <
+    typename DerivedV, 
+    typename DerivedF,
+    typename DerivedCN, 
+    typename DerivedFN,
+    typename DerivedTC, 
+    typename DerivedFTC>
+  IGL_INLINE bool writeOBJ(
+    const std::string str,
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F,
+    const Eigen::MatrixBase<DerivedCN>& CN,
+    const Eigen::MatrixBase<DerivedFN>& FN,
+    const Eigen::MatrixBase<DerivedTC>& TC,
+    const Eigen::MatrixBase<DerivedFTC>& FTC);
   template <typename DerivedV, typename DerivedF>
   IGL_INLINE bool writeOBJ(
     const std::string str,
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F);
-  
-  template <typename DerivedV, typename DerivedF, typename DerivedT>
-  IGL_INLINE bool writeOBJ(
-    const std::string str,
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F,
-    const Eigen::PlainObjectBase<DerivedV>& CN,
-    const Eigen::PlainObjectBase<DerivedF>& FN,
-    const Eigen::PlainObjectBase<DerivedT>& TC,
-    const Eigen::PlainObjectBase<DerivedF>& FTC);
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F);
 
 }
 

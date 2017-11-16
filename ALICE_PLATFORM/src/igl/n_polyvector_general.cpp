@@ -6,14 +6,16 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <igl/n_polyvector_general.h>
-#include <igl/edge_topology.h>
-#include <igl/local_basis.h>
-#include <igl/nchoosek.h>
-#include <igl/slice.h>
-#include <igl/polyroots.h>
+#include "LinSpaced.h"
+#include "n_polyvector_general.h"
+#include "edge_topology.h"
+#include "local_basis.h"
+#include "nchoosek.h"
+#include "slice.h"
+#include "polyroots.h"
 #include <Eigen/Sparse>
 #include <Eigen/Geometry>
+#include <iostream>
 #include <iostream>
 
 namespace igl {
@@ -36,7 +38,7 @@ namespace igl {
     Eigen::VectorXi indInteriorToFull;
     Eigen::VectorXi indFullToInterior;
 
-    Eigen::PlainObjectBase<DerivedV> B1, B2, FN;
+    DerivedV B1, B2, FN;
 
     IGL_INLINE void computek();
     IGL_INLINE void setFieldFromGeneralCoefficients(const  std::vector<Eigen::Matrix<std::complex<typename DerivedV::Scalar>, Eigen::Dynamic,1>> &coeffs,
@@ -99,7 +101,7 @@ precomputeInteriorEdges()
   // Flag border edges
   numInteriorEdges = 0;
   isBorderEdge.setZero(numE,1);
-  indFullToInterior = -1.*Eigen::VectorXi::Ones(numE,1);
+  indFullToInterior = -1*Eigen::VectorXi::Ones(numE,1);
 
   for(unsigned i=0; i<numE; ++i)
   {
@@ -201,7 +203,6 @@ IGL_INLINE bool igl::GeneralPolyVectorFieldFinder<DerivedV, DerivedF>::
                            const Eigen::VectorXi &rootsIndex,
                            Eigen::Matrix<typename DerivedV::Scalar, Eigen::Dynamic, Eigen::Dynamic> &output)
 {
-
   // polynomial is of the form:
   // z^(2n) +
   // -c[0]z^(2n-1) +
@@ -209,13 +210,10 @@ IGL_INLINE bool igl::GeneralPolyVectorFieldFinder<DerivedV, DerivedF>::
   // -c[2]z^(2n-3) +
   // ... +
   // (-1)^n c[n-1]
-
   std::vector<Eigen::Matrix<std::complex<typename DerivedV::Scalar>, Eigen::Dynamic,1>> coeffs(n,Eigen::Matrix<std::complex<typename DerivedV::Scalar>, Eigen::Dynamic,1>::Zero(numF, 1));
-
   for (int i =0; i<n; ++i)
   {
     int degree = i+1;
-
     Eigen::Matrix<std::complex<typename DerivedV::Scalar>, Eigen::Dynamic,1> Ck;
     getGeneralCoeffConstraints(isConstrained,
                                cfW,
@@ -232,10 +230,8 @@ IGL_INLINE bool igl::GeneralPolyVectorFieldFinder<DerivedV, DerivedF>::
     else
       minQuadWithKnownMini(DD, f, isConstrained, Ck, coeffs[i]);
   }
-
   std::vector<Eigen::Matrix<typename DerivedV::Scalar, Eigen::Dynamic, 2> > pv;
   setFieldFromGeneralCoefficients(coeffs, pv);
-
   output.setZero(numF,3*n);
   for (int fi=0; fi<numF; ++fi)
   {
@@ -326,8 +322,11 @@ IGL_INLINE void igl::GeneralPolyVectorFieldFinder<DerivedV, DerivedF>::getGenera
   Ck.resize(numConstrained,1);
   // int n = rootsIndex.cols();
 
-  std::vector<std::vector<int>> allCombs;
-  igl::nchoosek(0,k+1,n,allCombs);
+  Eigen::MatrixXi allCombs;
+  {
+    Eigen::VectorXi V = igl::LinSpaced<Eigen::VectorXi >(n,0,n-1);
+    igl::nchoosek(V,k+1,allCombs);
+  }
 
   int ind = 0;
   for (int fi = 0; fi <numF; ++fi)
@@ -338,13 +337,13 @@ IGL_INLINE void igl::GeneralPolyVectorFieldFinder<DerivedV, DerivedF>::getGenera
     {
       std::complex<typename DerivedV::Scalar> ck(0);
 
-      for (int j = 0; j < allCombs.size(); ++j)
+      for (int j = 0; j < allCombs.rows(); ++j)
       {
         std::complex<typename DerivedV::Scalar> tk(1.);
         //collect products
-        for (int i = 0; i < allCombs[j].size(); ++i)
+        for (int i = 0; i < allCombs.cols(); ++i)
         {
-          int index = allCombs[j][i];
+          int index = allCombs(j,i);
 
           int ri = rootsIndex[index];
           Eigen::Matrix<typename DerivedV::Scalar, 1, 3> w;
@@ -489,5 +488,5 @@ IGL_INLINE void igl::n_polyvector_general(const Eigen::MatrixXd &V,
 
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
+// Explicit template instantiation
 #endif

@@ -31,15 +31,15 @@ public:
     const Eigen::PlainObjectBase<DerivedF> &F;
     const Eigen::PlainObjectBase<DerivedV> &PD1;
     const Eigen::PlainObjectBase<DerivedV> &PD2;
-    Eigen::PlainObjectBase<DerivedV> N;
+    DerivedV N;
 
 private:
     // internal
     std::vector<bool> V_border; // bool
     std::vector<std::vector<int> > VF;
     std::vector<std::vector<int> > VFi;
-    Eigen::PlainObjectBase<DerivedF> TT;
-    Eigen::PlainObjectBase<DerivedF> TTi;
+    DerivedF TT;
+    DerivedF TTi;
 
 
 private:
@@ -66,7 +66,7 @@ private:
         double angle_diff = atan2(dir1Rot.dot(PD2.row(f0)),dir1Rot.dot(PD1.row(f0)));
 
         double step=M_PI;
-        int i=(int)floor((angle_diff/step)+0.5);
+        int i=(int)std::floor((angle_diff/step)+0.5);
         assert((i>=-2)&&(i<=2));
         int k=0;
         if (i>=0)
@@ -93,7 +93,7 @@ public:
         igl::per_face_normals(V,F,N);
         V_border = igl::is_border_vertex(V,F);
         igl::vertex_triangle_adjacency(V,F,VF,VFi);
-        igl::triangle_triangle_adjacency(V,F,TT,TTi);
+        igl::triangle_triangle_adjacency(F,TT,TTi);
     }
 
     inline void calculateMissmatchLine(Eigen::PlainObjectBase<DerivedO> &Handle_MMatch)
@@ -122,8 +122,8 @@ IGL_INLINE void igl::line_field_missmatch(const Eigen::PlainObjectBase<DerivedV>
                                 const bool isCombed,
                                 Eigen::PlainObjectBase<DerivedO> &missmatch)
 {
-    Eigen::PlainObjectBase<DerivedV> PD1_combed;
-    Eigen::PlainObjectBase<DerivedV> PD2_combed;
+    DerivedV PD1_combed;
+    DerivedV PD2_combed;
 
     if (!isCombed)
         igl::comb_line_field(V,F,PD1,PD1_combed);
@@ -139,5 +139,5 @@ IGL_INLINE void igl::line_field_missmatch(const Eigen::PlainObjectBase<DerivedV>
 }
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
+// Explicit template instantiation
 #endif

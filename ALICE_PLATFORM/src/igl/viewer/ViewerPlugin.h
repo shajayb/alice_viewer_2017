@@ -5,20 +5,21 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
+#ifndef IGL_VIEWER_VIEWER_PLUGIN_H
+#define IGL_VIEWER_VIEWER_PLUGIN_H
 
 // TODO:
 // * create plugins/skeleton.h
 // * pass time in draw function
 // * remove Preview3D from comments
 // * clean comments
-
-#ifndef IGL_VIEWER_PLUGIN_H
-#define IGL_VIEWER_PLUGIN_H
 #include <string>
 #include <igl/igl_inline.h>
 #include <vector>
 
 namespace igl
+{
+namespace viewer
 {
 
 // Abstract class for plugins
@@ -95,6 +96,11 @@ public:
     return false;
   }
 
+  // This function is called after the window has been resized
+  IGL_INLINE virtual void post_resize(int w, int h)
+  {
+  }
+
   // This function is called when the mouse button is pressed
   // - button can be GLUT_LEFT_BUTTON, GLUT_MIDDLE_BUTTON or GLUT_RIGHT_BUTTON
   // - modifiers is a bitfield that might one or more of the following bits Preview3D::NO_KEY, Preview3D::SHIFT, Preview3D::CTRL, Preview3D::ALT;
@@ -125,7 +131,16 @@ public:
     return false;
   }
 
-  // This function is called when a keyboard key is pressed
+  // This function is called when a keyboard key is pressed. Unlike key_down
+  // this will reveal the actual character being sent (not just the physical
+  // key)
+  // - modifiers is a bitfield that might one or more of the following bits Preview3D::NO_KEY, Preview3D::SHIFT, Preview3D::CTRL, Preview3D::ALT;
+  IGL_INLINE virtual bool key_pressed(unsigned int key, int modifiers)
+  {
+    return false;
+  }
+
+  // This function is called when a keyboard key is down
   // - modifiers is a bitfield that might one or more of the following bits Preview3D::NO_KEY, Preview3D::SHIFT, Preview3D::CTRL, Preview3D::ALT;
   IGL_INLINE virtual bool key_down(int key, int modifiers)
   {
@@ -148,18 +163,19 @@ protected:
 #ifdef ENABLE_SERIALIZATION
 namespace serialization
 {
-  IGL_INLINE void serialize(const ViewerPlugin& obj,std::vector<char>& buffer)
+  inline void serialize(const ViewerPlugin& obj,std::vector<char>& buffer)
   {
     obj.serialize(buffer);
   }
 
-  IGL_INLINE void deserialize(ViewerPlugin& obj,const std::vector<char>& buffer)
+  inline void deserialize(ViewerPlugin& obj,const std::vector<char>& buffer)
   {
     obj.deserialize(buffer);
   }
 }
 #endif
 
+}
 }
 
 #endif

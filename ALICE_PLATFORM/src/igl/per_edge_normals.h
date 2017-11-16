@@ -25,7 +25,8 @@ namespace igl
   // Inputs:
   //   V  #V by 3 eigen Matrix of mesh vertex 3D positions
   //   F  #F by 3 eigen Matrix of face (triangle) indices
-  //   weighting  weighting type
+  //   weight  weighting type
+  //   FN  #F by 3 matrix of 3D face normals per face
   // Output:
   //   N  #2 by 3 matrix of mesh edge 3D normals per row
   //   E  #E by 2 matrix of edge indices per row
@@ -39,10 +40,10 @@ namespace igl
     typename DerivedE,
     typename DerivedEMAP>
   IGL_INLINE void per_edge_normals(
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F,
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F,
     const PerEdgeNormalsWeightingType weight,
-    const Eigen::PlainObjectBase<DerivedFN>& FN,
+    const Eigen::MatrixBase<DerivedFN>& FN,
     Eigen::PlainObjectBase<DerivedN> & N,
     Eigen::PlainObjectBase<DerivedE> & E,
     Eigen::PlainObjectBase<DerivedEMAP> & EMAP);
@@ -53,8 +54,8 @@ namespace igl
     typename DerivedE,
     typename DerivedEMAP>
   IGL_INLINE void per_edge_normals(
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F,
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F,
     const PerEdgeNormalsWeightingType weight,
     Eigen::PlainObjectBase<DerivedN> & N,
     Eigen::PlainObjectBase<DerivedE> & E,
@@ -66,8 +67,8 @@ namespace igl
     typename DerivedE,
     typename DerivedEMAP>
   IGL_INLINE void per_edge_normals(
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F,
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F,
     Eigen::PlainObjectBase<DerivedN> & N,
     Eigen::PlainObjectBase<DerivedE> & E,
     Eigen::PlainObjectBase<DerivedEMAP> & EMAP);

@@ -8,10 +8,14 @@
 #include "readOBJ.h"
 
 #include "list_to_matrix.h"
+#include "max_size.h"
+#include "min_size.h"
 
 #include <iostream>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
+#include <iterator>
 
 template <typename Scalar, typename Index>
 IGL_INLINE bool igl::readOBJ(
@@ -31,6 +35,19 @@ IGL_INLINE bool igl::readOBJ(
             obj_file_name.c_str());
     return false;
   }
+  return igl::readOBJ(obj_file,V,TC,N,F,FTC,FN);
+}
+
+template <typename Scalar, typename Index>
+IGL_INLINE bool igl::readOBJ(
+  FILE * obj_file,
+  std::vector<std::vector<Scalar > > & V,
+  std::vector<std::vector<Scalar > > & TC,
+  std::vector<std::vector<Scalar > > & N,
+  std::vector<std::vector<Index > > & F,
+  std::vector<std::vector<Index > > & FTC,
+  std::vector<std::vector<Index > > & FN)
+{
   // File open was succesfull so clear outputs
   V.clear();
   TC.clear();
@@ -62,22 +79,18 @@ IGL_INLINE bool igl::readOBJ(
       char * l = &line[strlen(type)];
       if(type == v)
       {
-        double x[4];
-        int count =
-        sscanf(l,"%lf %lf %lf %lf\n",&x[0],&x[1],&x[2],&x[3]);
-        if(count != 3 && count != 4)
+        std::istringstream ls(&line[1]);
+        std::vector<Scalar > vertex{ std::istream_iterator<Scalar >(ls), std::istream_iterator<Scalar >() };
+
+        if (vertex.size() < 3)
         {
           fprintf(stderr,
-                  "Error: readOBJ() vertex on line %d should have 3 or 4 coordinates",
+                  "Error: readOBJ() vertex on line %d should have at least 3 coordinates",
                   line_no);
           fclose(obj_file);
           return false;
         }
-        std::vector<Scalar > vertex(count);
-        for(int i = 0;i<count;i++)
-        {
-          vertex[i] = x[i];
-        }
+      
         V.push_back(vertex);
       }else if(type == vn)
       {
@@ -120,6 +133,18 @@ IGL_INLINE bool igl::readOBJ(
         TC.push_back(tex);
       }else if(type == f)
       {
+        const auto & shift = [&V](const int i)->int
+        {
+          return i<0 ? i+V.size() : i-1;
+        };
+        const auto & shift_t = [&TC](const int i)->int
+        {
+          return i<0 ? i+TC.size() : i-1;
+        };
+        const auto & shift_n = [&N](const int i)->int
+        {
+          return i<0 ? i+N.size() : i-1;
+        };
         std::vector<Index > f;
         std::vector<Index > ftc;
         std::vector<Index > fn;
@@ -131,23 +156,23 @@ IGL_INLINE bool igl::readOBJ(
           // adjust offset
           l += offset;
           // Process word
-          unsigned int i,it,in;
-          if(sscanf(word,"%u/%u/%u",&i,&it,&in) == 3)
+          long int i,it,in;
+          if(sscanf(word,"%ld/%ld/%ld",&i,&it,&in) == 3)
           {
-            f.push_back(i-1);
-            ftc.push_back(it-1);
-            fn.push_back(in-1);
-          }else if(sscanf(word,"%u/%u",&i,&it) == 2)
+            f.push_back(shift(i));
+            ftc.push_back(shift_t(it));
+            fn.push_back(shift_n(in));
+          }else if(sscanf(word,"%ld/%ld",&i,&it) == 2)
           {
-            f.push_back(i-1);
-            ftc.push_back(it-1);
-          }else if(sscanf(word,"%u//%u",&i,&in) == 2)
+            f.push_back(shift(i));
+            ftc.push_back(shift_t(it));
+          }else if(sscanf(word,"%ld//%ld",&i,&in) == 2)
           {
-            f.push_back(i-1);
-            fn.push_back(in-1);
-          }else if(sscanf(word,"%u",&i) == 1)
+            f.push_back(shift(i));
+            fn.push_back(shift_n(in));
+          }else if(sscanf(word,"%ld",&i) == 1)
           {
-            f.push_back(i-1);
+            f.push_back(shift(i));
           }else
           {
             fprintf(stderr,
@@ -215,15 +240,21 @@ IGL_INLINE bool igl::readOBJ(
   return readOBJ(obj_file_name,V,TC,N,F,FTC,FN);
 }
 
-template <typename DerivedV, typename DerivedF, typename DerivedT>
+template <
+  typename DerivedV, 
+  typename DerivedTC, 
+  typename DerivedCN, 
+  typename DerivedF,
+  typename DerivedFTC,
+  typename DerivedFN>
 IGL_INLINE bool igl::readOBJ(
   const std::string str,
   Eigen::PlainObjectBase<DerivedV>& V,
+  Eigen::PlainObjectBase<DerivedTC>& TC,
+  Eigen::PlainObjectBase<DerivedCN>& CN,
   Eigen::PlainObjectBase<DerivedF>& F,
-  Eigen::PlainObjectBase<DerivedV>& CN,
-  Eigen::PlainObjectBase<DerivedF>& FN,
-  Eigen::PlainObjectBase<DerivedT>& TC,
-  Eigen::PlainObjectBase<DerivedF>& FTC)
+  Eigen::PlainObjectBase<DerivedFTC>& FTC,
+  Eigen::PlainObjectBase<DerivedFN>& FN)
 {
   std::vector<std::vector<double> > vV,vTC,vN;
   std::vector<std::vector<int> > vF,vFTC,vFN;
@@ -235,15 +266,16 @@ IGL_INLINE bool igl::readOBJ(
     return false;
   }
   bool V_rect = igl::list_to_matrix(vV,V);
+  const char * format = "Failed to cast %s to matrix: min (%d) != max (%d)\n";
   if(!V_rect)
   {
-    // igl::list_to_matrix(vV,V) already printed error message to std err
+    printf(format,"V",igl::min_size(vV),igl::max_size(vV));
     return false;
   }
   bool F_rect = igl::list_to_matrix(vF,F);
   if(!F_rect)
   {
-    // igl::list_to_matrix(vF,F) already printed error message to std err
+    printf(format,"F",igl::min_size(vF),igl::max_size(vF));
     return false;
   }
   if(!vN.empty())
@@ -251,7 +283,7 @@ IGL_INLINE bool igl::readOBJ(
     bool VN_rect = igl::list_to_matrix(vN,CN);
     if(!VN_rect)
     {
-      // igl::list_to_matrix(vV,V) already printed error message to std err
+      printf(format,"CN",igl::min_size(vN),igl::max_size(vN));
       return false;
     }
   }
@@ -261,7 +293,7 @@ IGL_INLINE bool igl::readOBJ(
     bool FN_rect = igl::list_to_matrix(vFN,FN);
     if(!FN_rect)
     {
-      // igl::list_to_matrix(vV,V) already printed error message to std err
+      printf(format,"FN",igl::min_size(vFN),igl::max_size(vFN));
       return false;
     }
   }
@@ -272,7 +304,7 @@ IGL_INLINE bool igl::readOBJ(
     bool T_rect = igl::list_to_matrix(vTC,TC);
     if(!T_rect)
     {
-      // igl::list_to_matrix(vTC,T) already printed error message to std err
+      printf(format,"TC",igl::min_size(vTC),igl::max_size(vTC));
       return false;
     }
   }
@@ -282,74 +314,10 @@ IGL_INLINE bool igl::readOBJ(
     bool FTC_rect = igl::list_to_matrix(vFTC,FTC);
     if(!FTC_rect)
     {
-      // igl::list_to_matrix(vF,F) already printed error message to std err
+      printf(format,"FTC",igl::min_size(vFTC),igl::max_size(vFTC));
       return false;
     }
   }
-  // Legacy
-  if(F.cols() != 3)
-  {
-    fprintf(stderr,
-            "Error: readOBJ(filename,V,F) is meant for reading triangle-only"
-            " meshes. This mesh has faces all with size %d. See readOBJ.h for other"
-            " options.\n",
-            (int)F.cols());
-    return false;
-  }
-  return true;
-}
-
-template <typename DerivedV, typename DerivedF, typename DerivedT, typename Index>
-IGL_INLINE bool igl::readOBJPoly(
-  const std::string str,
-  Eigen::PlainObjectBase<DerivedV>& V,
-  std::vector<std::vector< Index > >& F,
-  Eigen::PlainObjectBase<DerivedV>& CN,
-  Eigen::PlainObjectBase<DerivedF>& FN,
-  Eigen::PlainObjectBase<DerivedT>& TC,
-  Eigen::PlainObjectBase<DerivedF>& FTC)
-{
-  std::vector<std::vector<double> > vV,vTC,vN;
-  std::vector<std::vector<Index> > vF,vFTC,vFN;
-  bool success = igl::readOBJ(str,vV,vTC,vN,vF,vFTC,vFN);
-  if(!success)
-    return false;
-
-  bool V_rect = igl::list_to_matrix(vV,V);
-  if(!V_rect)
-    return false;
-
-  F = vF;
-
-  if(!vN.empty())
-  {
-    bool VN_rect = igl::list_to_matrix(vN,CN);
-    if(!VN_rect)
-      return false;
-  }
-
-  if(!vFN.empty())
-  {
-    bool FN_rect = igl::list_to_matrix(vFN,FN);
-    if(!FN_rect)
-      return false;
-  }
-
-  if(!vTC.empty())
-  {
-
-    bool T_rect = igl::list_to_matrix(vTC,TC);
-    if(!T_rect)
-      return false;
-  }
-  if(!vFTC.empty())
-  {
-
-    bool FTC_rect = igl::list_to_matrix(vFTC,FTC);
-    if(!FTC_rect)
-      return false;
-  }
-
   return true;
 }
 
@@ -380,26 +348,19 @@ IGL_INLINE bool igl::readOBJ(
     // igl::list_to_matrix(vF,F) already printed error message to std err
     return false;
   }
-  // THIS IS ANNOYING, I WANT TO READ QUADS, Why not?
-  //// Legacy
-  //if(F.cols() != 3)
-  //{
-  //  fprintf(stderr,
-  //          "Error: readOBJ(filename,V,F) is meant for reading triangle-only"
-  //          " meshes. This mesh has faces all with size %d. See readOBJ.h for other"
-  //          " options.\n",
-  //          (int)F.cols());
-  //  return false;
-  //}
   return true;
 }
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
+// Explicit template instantiation
+// generated by autoexplicit.sh
+template bool igl::readOBJ<Eigen::Matrix<double, -1, -1, 1, -1, -1>, Eigen::Matrix<double, -1, -1, 1, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, 3, 1, -1, 3>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 1, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 1, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, 3, 1, -1, 3> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
+// generated by autoexplicit.sh
+template bool igl::readOBJ<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, -1, 1, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 1, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
 // generated by autoexplicit.sh
 template bool igl::readOBJ<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
-template bool igl::readOBJ<Eigen::Matrix<double, -1, 3, 1, -1, 3>, Eigen::Matrix<unsigned int, -1, -1, 1, -1, -1>, Eigen::Matrix<double, -1, 2, 1, -1, 2> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 3, 1, -1, 3> >&, Eigen::PlainObjectBase<Eigen::Matrix<unsigned int, -1, -1, 1, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 3, 1, -1, 3> >&, Eigen::PlainObjectBase<Eigen::Matrix<unsigned int, -1, -1, 1, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 2, 1, -1, 2> >&, Eigen::PlainObjectBase<Eigen::Matrix<unsigned int, -1, -1, 1, -1, -1> >&);
-template bool igl::readOBJ<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
-template bool igl::readOBJ<Eigen::Matrix<double, -1, 3, 0, -1, 3>, Eigen::Matrix<int, -1, 3, 0, -1, 3> >(std::string, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 3, 0, -1, 3> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, 3, 0, -1, 3> >&);
-template bool igl::readOBJPoly<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1>, int>(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
+// generated by autoexplicit.sh
+template bool igl::readOBJ<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1> >(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> >&);
+// generated by autoexplicit.sh
+template bool igl::readOBJ<double, int>(std::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >&, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >&, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >&, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >&, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >&, std::vector<std::vector<int, std::allocator<int> >, std::allocator<std::vector<int, std::allocator<int> > > >&);
 #endif

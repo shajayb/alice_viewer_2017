@@ -6,28 +6,18 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 #include "render_to_png.h"
-#include <YImage.hpp>
+#include <igl_stb_image.h>
 
-#ifdef __APPLE__
-#  include <OpenGL/gl.h>
-#else
-#  ifdef _WIN32
-#    define NOMINMAX
-#    include <Windows.h>
-#    undef NOMINMAX
-#  endif
-#  include <GL/gl.h>
-#endif
+#include "../opengl/gl.h"
 
-IGL_INLINE bool igl::render_to_png(
+IGL_INLINE bool igl::png::render_to_png(
   const std::string png_file,
   const int width,
   const int height,
   const bool alpha,
   const bool fast)
 {
-  YImage *img = new YImage();
-  img->resize(width,height);
+  unsigned char * data = new unsigned char[4*width*height];
   glReadPixels(
     0,
     0,
@@ -35,22 +25,21 @@ IGL_INLINE bool igl::render_to_png(
     height,
     GL_RGBA,
     GL_UNSIGNED_BYTE,
-    img->data());
-  img->flip();
+    data);
+  //img->flip();
   if(!alpha)
   {
     for(int i = 0;i<width;i++)
     for(int j = 0;j<height;j++)
     {
-      img->at(i,j).a = 255;
+      data[4*(i+j*width)+3] = 255;
     }
   }
-  bool ret = img->save(png_file.c_str(),fast);
-  delete img;
+  bool ret = igl::stbi_write_png(png_file.c_str(), width, height, 4, data, 4*width*sizeof(unsigned char));
+  delete [] data;
   return ret;
 }
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
-// template bool igl::render_to_png(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >, int, int, bool, bool);
-#endif;
+// Explicit template instantiation
+#endif

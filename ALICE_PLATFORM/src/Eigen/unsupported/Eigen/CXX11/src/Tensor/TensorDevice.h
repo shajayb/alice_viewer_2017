@@ -21,8 +21,7 @@ namespace Eigen {
   * Example:
   *    C.device(EIGEN_GPU) = A + B;
   *
-  * Todo: thread pools.
-  * Todo: operator +=, -=, *= and so on.
+  * Todo: operator *= and /=.
   */
 
 template <typename ExpressionType, typename DeviceType> class TensorDevice {
@@ -33,8 +32,7 @@ template <typename ExpressionType, typename DeviceType> class TensorDevice {
     EIGEN_STRONG_INLINE TensorDevice& operator=(const OtherDerived& other) {
       typedef TensorAssignOp<ExpressionType, const OtherDerived> Assign;
       Assign assign(m_expression, other);
-      static const bool Vectorize = TensorEvaluator<const Assign, DeviceType>::PacketAccess;
-      internal::TensorExecutor<const Assign, DeviceType, Vectorize>::run(assign, m_device);
+      internal::TensorExecutor<const Assign, DeviceType>::run(assign, m_device);
       return *this;
     }
 
@@ -45,8 +43,18 @@ template <typename ExpressionType, typename DeviceType> class TensorDevice {
       Sum sum(m_expression, other);
       typedef TensorAssignOp<ExpressionType, const Sum> Assign;
       Assign assign(m_expression, sum);
-      static const bool Vectorize = TensorEvaluator<const Assign, DeviceType>::PacketAccess;
-      internal::TensorExecutor<const Assign, DeviceType, Vectorize>::run(assign, m_device);
+      internal::TensorExecutor<const Assign, DeviceType>::run(assign, m_device);
+      return *this;
+    }
+
+    template<typename OtherDerived>
+    EIGEN_STRONG_INLINE TensorDevice& operator-=(const OtherDerived& other) {
+      typedef typename OtherDerived::Scalar Scalar;
+      typedef TensorCwiseBinaryOp<internal::scalar_difference_op<Scalar>, const ExpressionType, const OtherDerived> Difference;
+      Difference difference(m_expression, other);
+      typedef TensorAssignOp<ExpressionType, const Difference> Assign;
+      Assign assign(m_expression, difference);
+      internal::TensorExecutor<const Assign, DeviceType>::run(assign, m_device);
       return *this;
     }
 
@@ -54,72 +62,6 @@ template <typename ExpressionType, typename DeviceType> class TensorDevice {
     const DeviceType& m_device;
     ExpressionType& m_expression;
 };
-
-
-#ifdef EIGEN_USE_THREADS
-template <typename ExpressionType> class TensorDevice<ExpressionType, ThreadPoolDevice> {
-  public:
-    TensorDevice(const ThreadPoolDevice& device, ExpressionType& expression) : m_device(device), m_expression(expression) {}
-
-    template<typename OtherDerived>
-    EIGEN_STRONG_INLINE TensorDevice& operator=(const OtherDerived& other) {
-      typedef TensorAssignOp<ExpressionType, const OtherDerived> Assign;
-      Assign assign(m_expression, other);
-      static const bool Vectorize = TensorEvaluator<const Assign, ThreadPoolDevice>::PacketAccess;
-      internal::TensorExecutor<const Assign, ThreadPoolDevice, Vectorize>::run(assign, m_device);
-      return *this;
-    }
-
-    template<typename OtherDerived>
-    EIGEN_STRONG_INLINE TensorDevice& operator+=(const OtherDerived& other) {
-      typedef typename OtherDerived::Scalar Scalar;
-      typedef TensorCwiseBinaryOp<internal::scalar_sum_op<Scalar>, const ExpressionType, const OtherDerived> Sum;
-      Sum sum(m_expression, other);
-      typedef TensorAssignOp<ExpressionType, const Sum> Assign;
-      Assign assign(m_expression, sum);
-      static const bool Vectorize = TensorEvaluator<const Assign, ThreadPoolDevice>::PacketAccess;
-      internal::TensorExecutor<const Assign, ThreadPoolDevice, Vectorize>::run(assign, m_device);
-      return *this;
-    }
-
-  protected:
-    const ThreadPoolDevice& m_device;
-    ExpressionType& m_expression;
-};
-#endif
-
-
-#if defined(EIGEN_USE_GPU) && defined(__CUDACC__)
-template <typename ExpressionType> class TensorDevice<ExpressionType, GpuDevice>
-{
-  public:
-    TensorDevice(const GpuDevice& device, ExpressionType& expression) : m_device(device), m_expression(expression) {}
-
-    template<typename OtherDerived>
-    EIGEN_STRONG_INLINE TensorDevice& operator=(const OtherDerived& other) {
-      typedef TensorAssignOp<ExpressionType, const OtherDerived> Assign;
-      Assign assign(m_expression, other);
-      internal::TensorExecutor<const Assign, GpuDevice, false>::run(assign, m_device);
-      return *this;
-    }
-
-    template<typename OtherDerived>
-    EIGEN_STRONG_INLINE TensorDevice& operator+=(const OtherDerived& other) {
-      typedef typename OtherDerived::Scalar Scalar;
-      typedef TensorCwiseBinaryOp<internal::scalar_sum_op<Scalar>, const ExpressionType, const OtherDerived> Sum;
-      Sum sum(m_expression, other);
-      typedef TensorAssignOp<ExpressionType, const Sum> Assign;
-      Assign assign(m_expression, sum);
-      internal::TensorExecutor<const Assign, GpuDevice, false>::run(assign, m_device);
-      return *this;
-    }
-
-  protected:
-    const GpuDevice& m_device;
-    ExpressionType m_expression;
-};
-#endif
-
 
 } // end namespace Eigen
 

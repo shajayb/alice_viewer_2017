@@ -8,7 +8,7 @@
 #ifndef IGL_AVERAGEEDGELENGTH_H
 #define IGL_AVERAGEEDGELENGTH_H
 
-#include "igl/igl_inline.h"
+#include "igl_inline.h"
 #include <Eigen/Core>
 #include <string>
 #include <vector>
@@ -29,8 +29,8 @@ namespace igl
   // See also: adjacency_matrix
   template <typename DerivedV, typename DerivedF>
   IGL_INLINE double avg_edge_length(
-    const Eigen::PlainObjectBase<DerivedV>& V,
-    const Eigen::PlainObjectBase<DerivedF>& F);
+    const Eigen::MatrixBase<DerivedV>& V,
+    const Eigen::MatrixBase<DerivedF>& F);
 
 }
 

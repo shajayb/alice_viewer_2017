@@ -83,7 +83,7 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheLeft,Mode,Conju
     // coherence when accessing the rhs elements
     std::ptrdiff_t l1, l2, l3;
     manage_caching_sizes(GetAction, &l1, &l2, &l3);
-    Index subcols = cols>0 ? l2/(4 * sizeof(Scalar) * otherStride) : 0;
+    Index subcols = cols>0 ? l2/(4 * sizeof(Scalar) * std::max<Index>(otherStride,size)) : 0;
     subcols = std::max<Index>((subcols/Traits::nr)*Traits::nr, Traits::nr);
 
     for(Index k2=IsLower ? 0 : size;
@@ -117,8 +117,9 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheLeft,Mode,Conju
           {
             // TODO write a small kernel handling this (can be shared with trsv)
             Index i  = IsLower ? k2+k1+k : k2-k1-k-1;
-            Index s  = IsLower ? k2+k1 : i+1;
             Index rs = actualPanelWidth - k - 1; // remaining size
+            Index s  = TriStorageOrder==RowMajor ? (IsLower ? k2+k1 : i+1)
+                                                 :  IsLower ? i+1 : i-rs;
 
             Scalar a = (Mode & UnitDiag) ? Scalar(1) : Scalar(1)/conj(tri(i,i));
             for (Index j=j2; j<j2+actual_cols; ++j)
@@ -135,7 +136,6 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheLeft,Mode,Conju
               }
               else
               {
-                Index s = IsLower ? i+1 : i-rs;
                 Scalar b = (other(i,j) *= a);
                 Scalar* r = &other(s,j);
                 const Scalar* l = &tri(s,i);
@@ -183,7 +183,7 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheLeft,Mode,Conju
     }
   }
 
-/* Optimized triangular solver with multiple left hand sides and the trinagular matrix on the right
+/* Optimized triangular solver with multiple left hand sides and the triangular matrix on the right
  */
 template <typename Scalar, typename Index, int Mode, bool Conjugate, int TriStorageOrder>
 struct triangular_solve_matrix<Scalar,Index,OnTheRight,Mode,Conjugate,TriStorageOrder,ColMajor>
@@ -202,6 +202,7 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheRight,Mode,Conj
     level3_blocking<Scalar,Scalar>& blocking)
   {
     Index rows = otherSize;
+    typedef typename NumTraits<Scalar>::Real RealScalar;
 
     typedef blas_data_mapper<Scalar, Index, ColMajor> LhsMapper;
     typedef const_blas_data_mapper<Scalar, Index, TriStorageOrder> RhsMapper;
@@ -304,9 +305,12 @@ EIGEN_DONT_INLINE void triangular_solve_matrix<Scalar,Index,OnTheRight,Mode,Conj
                 for (Index i=0; i<actual_mc; ++i)
                   r[i] -= a[i] * b;
               }
-              Scalar b = (Mode & UnitDiag) ? Scalar(1) : Scalar(1)/conj(rhs(j,j));
-              for (Index i=0; i<actual_mc; ++i)
-                r[i] *= b;
+              if((Mode & UnitDiag)==0)
+              {
+                Scalar inv_rjj = RealScalar(1)/conj(rhs(j,j));
+                for (Index i=0; i<actual_mc; ++i)
+                  r[i] *= inv_rjj;
+              }
             }
 
             // pack the just computed part of lhs to A

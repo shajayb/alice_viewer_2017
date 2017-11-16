@@ -5,9 +5,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
-
-#ifndef IGL_VIEWER_DATA_H
-#define IGL_VIEWER_DATA_H
+#ifndef IGL_VIEWER_VIEWER_DATA_H
+#define IGL_VIEWER_VIEWER_DATA_H
 
 #include <cstdint>
 #include <vector>
@@ -17,6 +16,8 @@
 #include <igl/igl_inline.h>
 
 namespace igl
+{
+namespace viewer
 {
 
 // TODO: write documentation
@@ -59,12 +60,42 @@ public:
   // Inputs:
   //   C  #V|#F|1 by 3 list of colors
   IGL_INLINE void set_colors(const Eigen::MatrixXd &C);
+  // Set per-vertex UV coordinates
+  //
+  // Inputs:
+  //   UV  #V by 2 list of UV coordinates (indexed by F)
   IGL_INLINE void set_uv(const Eigen::MatrixXd& UV);
+  // Set per-corner UV coordinates
+  //
+  // Inputs:
+  //   UV_V  #UV by 2 list of UV coordinates
+  //   UV_F  #F by 3 list of UV indices into UV_V
   IGL_INLINE void set_uv(const Eigen::MatrixXd& UV_V, const Eigen::MatrixXi& UV_F);
+  // Set the texture associated with the mesh.
+  //
+  // Inputs:
+  //   R  width by height image matrix of red channel
+  //   G  width by height image matrix of green channel
+  //   B  width by height image matrix of blue channel
+  //
   IGL_INLINE void set_texture(
-                    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& R,
-                    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& G,
-                    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& B);
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& R,
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& G,
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& B);
+
+  // Set the texture associated with the mesh.
+  //
+  // Inputs:
+  //   R  width by height image matrix of red channel
+  //   G  width by height image matrix of green channel
+  //   B  width by height image matrix of blue channel
+  //   A  width by height image matrix of alpha channel
+  //
+  IGL_INLINE void set_texture(
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& R,
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& G,
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& B,
+    const Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic>& A);
 
   // Sets points given a list of point vertices. In constrast to `set_points`
   // this will (purposefully) clober existing points.
@@ -73,7 +104,7 @@ public:
   //   P  #P by 3 list of vertex positions
   //   C  #P|1 by 3 color(s)
   IGL_INLINE void set_points(
-    const Eigen::MatrixXd& P,  
+    const Eigen::MatrixXd& P,
     const Eigen::MatrixXd& C);
   IGL_INLINE void add_points(const Eigen::MatrixXd& P,  const Eigen::MatrixXd& C);
   // Sets edges given a list of edge vertices and edge indices. In constrast
@@ -91,7 +122,16 @@ public:
   IGL_INLINE void compute_normals();
 
   // Assigns uniform colors to all faces/vertices
-  IGL_INLINE void uniform_colors(Eigen::Vector3d ambient, Eigen::Vector3d diffuse, Eigen::Vector3d specular);
+  IGL_INLINE void uniform_colors(
+    const Eigen::Vector3d& diffuse,
+    const Eigen::Vector3d& ambient,
+    const Eigen::Vector3d& specular);
+
+  // Assigns uniform colors to all faces/vertices
+  IGL_INLINE void uniform_colors(
+    const Eigen::Vector4d& ambient,
+    const Eigen::Vector4d& diffuse,
+    const Eigen::Vector4d& specular);
 
   // Generates a default grid texture
   IGL_INLINE void grid_texture();
@@ -121,6 +161,7 @@ public:
   Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> texture_R;
   Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> texture_G;
   Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> texture_B;
+  Eigen::Matrix<unsigned char,Eigen::Dynamic,Eigen::Dynamic> texture_A;
 
   // Overlays
 
@@ -149,6 +190,62 @@ public:
 };
 
 }
+}
+
+#ifdef ENABLE_SERIALIZATION
+#include <igl/serialize.h>
+namespace igl {
+	namespace serialization {
+
+		inline void serialization(bool s, igl::viewer::ViewerData& obj, std::vector<char>& buffer)
+		{
+			SERIALIZE_MEMBER(V);
+			SERIALIZE_MEMBER(F);
+
+			SERIALIZE_MEMBER(F_normals);
+			SERIALIZE_MEMBER(F_material_ambient);
+			SERIALIZE_MEMBER(F_material_diffuse);
+			SERIALIZE_MEMBER(F_material_specular);
+
+			SERIALIZE_MEMBER(V_normals);
+			SERIALIZE_MEMBER(V_material_ambient);
+			SERIALIZE_MEMBER(V_material_diffuse);
+			SERIALIZE_MEMBER(V_material_specular);
+
+			SERIALIZE_MEMBER(V_uv);
+			SERIALIZE_MEMBER(F_uv);
+
+			SERIALIZE_MEMBER(texture_R);
+			SERIALIZE_MEMBER(texture_G);
+			SERIALIZE_MEMBER(texture_B);
+      SERIALIZE_MEMBER(texture_A);
+
+			SERIALIZE_MEMBER(lines);
+			SERIALIZE_MEMBER(points);
+
+			SERIALIZE_MEMBER(labels_positions);
+			SERIALIZE_MEMBER(labels_strings);
+
+			SERIALIZE_MEMBER(dirty);
+
+			SERIALIZE_MEMBER(face_based);
+		}
+
+		template<>
+		inline void serialize(const igl::viewer::ViewerData& obj, std::vector<char>& buffer)
+		{
+			serialization(true, const_cast<igl::viewer::ViewerData&>(obj), buffer);
+		}
+
+		template<>
+		inline void deserialize(igl::viewer::ViewerData& obj, const std::vector<char>& buffer)
+		{
+			serialization(false, obj, const_cast<std::vector<char>&>(buffer));
+			obj.dirty = igl::viewer::ViewerData::DIRTY_ALL;
+		}
+	}
+}
+#endif
 
 #ifndef IGL_STATIC_LIBRARY
 #  include "ViewerData.cpp"

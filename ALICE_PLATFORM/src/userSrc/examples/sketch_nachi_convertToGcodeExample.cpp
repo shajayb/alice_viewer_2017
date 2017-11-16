@@ -1,6 +1,5 @@
 
 
-
 #ifdef _MAIN_
 
 #include "main.h"
@@ -37,7 +36,7 @@ bool drawEdges = true;
 
 void setup()
 {
-	path.readPath("data/path_1.txt", ",", 1.0);
+	path.readPath("data/path_1.txt", ",", 2.0);
 
 
 
@@ -102,7 +101,7 @@ void draw()
 	backGround(0.75);
 	drawGrid(20);
 
-	path.draw();
+	path.draw(false,false);
 	RM.draw(drawFaces, drawWire, drawEdges);
 
 	sprintf_s(s, " current point id : %i", path.currentPointId);

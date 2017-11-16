@@ -8,7 +8,7 @@
 NOTE: this routine has been adapted from the CSparse library:
 
 Copyright (c) 2006, Timothy A. Davis.
-http://www.cise.ufl.edu/research/sparse/CSparse
+http://www.suitesparse.com
 
 CSparse is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -84,8 +84,11 @@ StorageIndex cs_tdfs(StorageIndex j, StorageIndex k, StorageIndex *head, const S
 /** \internal
   * \ingroup OrderingMethods_Module 
   * Approximate minimum degree ordering algorithm.
-  * \returns the permutation P reducing the fill-in of the input matrix \a C
-  * The input matrix \a C must be a selfadjoint compressed column major SparseMatrix object. Both the upper and lower parts have to be stored, but the diagonal entries are optional.
+  *
+  * \param[in] C the input selfadjoint matrix stored in compressed column major format.
+  * \param[out] perm the permutation P reducing the fill-in of the input matrix \a C
+  *
+  * Note that the input matrix \a C must be complete, that is both the upper and lower parts have to be stored, as well as the diagonal entries.
   * On exit the values of C are destroyed */
 template<typename Scalar, typename StorageIndex>
 void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,StorageIndex>& C, PermutationMatrix<Dynamic,Dynamic,StorageIndex>& perm)
@@ -137,22 +140,27 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,StorageIndex>& C, Perm
     degree[i] = len[i];                 // degree of node i
   }
   mark = internal::cs_wclear<StorageIndex>(0, 0, w, n);         /* clear w */
-  elen[n] = -2;                         /* n is a dead element */
-  Cp[n] = -1;                           /* n is a root of assembly tree */
-  w[n] = 0;                             /* n is a dead element */
   
   /* --- Initialize degree lists ------------------------------------------ */
   for(i = 0; i < n; i++)
   {
+    bool has_diag = false;
+    for(p = Cp[i]; p<Cp[i+1]; ++p)
+      if(Ci[p]==i)
+      {
+        has_diag = true;
+        break;
+      }
+   
     d = degree[i];
-    if(d == 0)                         /* node i is empty */
+    if(d == 1 && has_diag)           /* node i is empty */
     {
       elen[i] = -2;                 /* element i is dead */
       nel++;
       Cp[i] = -1;                   /* i is a root of assembly tree */
       w[i] = 0;
     }
-    else if(d > dense)                 /* node i is dense */
+    else if(d > dense || !has_diag)  /* node i is dense or has no structural diagonal element */
     {
       nv[i] = 0;                    /* absorb i into element n */
       elen[i] = -1;                 /* node i is dead */
@@ -167,6 +175,10 @@ void minimum_degree_ordering(SparseMatrix<Scalar,ColMajor,StorageIndex>& C, Perm
       head[d] = i;
     }
   }
+  
+  elen[n] = -2;                         /* n is a dead element */
+  Cp[n] = -1;                           /* n is a root of assembly tree */
+  w[n] = 0;                             /* n is a dead element */
   
   while (nel < n)                         /* while (selecting pivots) do */
   {

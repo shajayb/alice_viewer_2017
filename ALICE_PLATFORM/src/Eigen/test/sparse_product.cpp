@@ -7,7 +7,25 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+static long int nb_temporaries;
+
+inline void on_temporary_creation() {
+  // here's a great place to set a breakpoint when debugging failures in this test!
+  nb_temporaries++;
+}
+
+#define EIGEN_SPARSE_CREATE_TEMPORARY_PLUGIN { on_temporary_creation(); }
+
 #include "sparse.h"
+
+#define VERIFY_EVALUATION_COUNT(XPR,N) {\
+    nb_temporaries = 0; \
+    CALL_SUBTEST( XPR ); \
+    if(nb_temporaries!=N) std::cerr << "nb_temporaries == " << nb_temporaries << "\n"; \
+    VERIFY( (#XPR) && nb_temporaries==N ); \
+  }
+
+
 
 template<typename SparseMatrixType> void sparse_product()
 {
@@ -67,11 +85,47 @@ template<typename SparseMatrixType> void sparse_product()
     VERIFY_IS_APPROX(m4 = m2*m3/s1, refMat4 = refMat2*refMat3/s1);
     VERIFY_IS_APPROX(m4 = m2*m3*s1, refMat4 = refMat2*refMat3*s1);
     VERIFY_IS_APPROX(m4 = s2*m2*m3*s1, refMat4 = s2*refMat2*refMat3*s1);
+    VERIFY_IS_APPROX(m4 = (m2+m2)*m3, refMat4 = (refMat2+refMat2)*refMat3);
+    VERIFY_IS_APPROX(m4 = m2*m3.leftCols(cols/2), refMat4 = refMat2*refMat3.leftCols(cols/2));
+    VERIFY_IS_APPROX(m4 = m2*(m3+m3).leftCols(cols/2), refMat4 = refMat2*(refMat3+refMat3).leftCols(cols/2));
 
     VERIFY_IS_APPROX(m4=(m2*m3).pruned(0), refMat4=refMat2*refMat3);
     VERIFY_IS_APPROX(m4=(m2t.transpose()*m3).pruned(0), refMat4=refMat2t.transpose()*refMat3);
     VERIFY_IS_APPROX(m4=(m2t.transpose()*m3t.transpose()).pruned(0), refMat4=refMat2t.transpose()*refMat3t.transpose());
     VERIFY_IS_APPROX(m4=(m2*m3t.transpose()).pruned(0), refMat4=refMat2*refMat3t.transpose());
+
+    // make sure the right product implementation is called:
+    if((!SparseMatrixType::IsRowMajor) && m2.rows()<=m3.cols())
+    {
+      VERIFY_EVALUATION_COUNT(m4 = m2*m3, 3); // 1 temp for the result + 2 for transposing and get a sorted result.
+      VERIFY_EVALUATION_COUNT(m4 = (m2*m3).pruned(0), 1);
+      VERIFY_EVALUATION_COUNT(m4 = (m2*m3).eval().pruned(0), 4);
+    }
+
+    // and that pruning is effective:
+    {
+      DenseMatrix Ad(2,2);
+      Ad << -1, 1, 1, 1;
+      SparseMatrixType As(Ad.sparseView()), B(2,2);
+      VERIFY_IS_EQUAL( (As*As.transpose()).eval().nonZeros(), 4);
+      VERIFY_IS_EQUAL( (Ad*Ad.transpose()).eval().sparseView().eval().nonZeros(), 2);
+      VERIFY_IS_EQUAL( (As*As.transpose()).pruned(1e-6).eval().nonZeros(), 2);
+    }
+
+    // dense ?= sparse * sparse
+    VERIFY_IS_APPROX(dm4 =m2*m3, refMat4 =refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4+=m2*m3, refMat4+=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4-=m2*m3, refMat4-=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4 =m2t.transpose()*m3, refMat4 =refMat2t.transpose()*refMat3);
+    VERIFY_IS_APPROX(dm4+=m2t.transpose()*m3, refMat4+=refMat2t.transpose()*refMat3);
+    VERIFY_IS_APPROX(dm4-=m2t.transpose()*m3, refMat4-=refMat2t.transpose()*refMat3);
+    VERIFY_IS_APPROX(dm4 =m2t.transpose()*m3t.transpose(), refMat4 =refMat2t.transpose()*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4+=m2t.transpose()*m3t.transpose(), refMat4+=refMat2t.transpose()*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4-=m2t.transpose()*m3t.transpose(), refMat4-=refMat2t.transpose()*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4 =m2*m3t.transpose(), refMat4 =refMat2*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4+=m2*m3t.transpose(), refMat4+=refMat2*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4-=m2*m3t.transpose(), refMat4-=refMat2*refMat3t.transpose());
+    VERIFY_IS_APPROX(dm4 = m2*m3*s1, refMat4 = refMat2*refMat3*s1);
 
     // test aliasing
     m4 = m2; refMat4 = refMat2;
@@ -85,6 +139,10 @@ template<typename SparseMatrixType> void sparse_product()
 
     VERIFY_IS_APPROX(dm4=m2*refMat3, refMat4=refMat2*refMat3);
     VERIFY_IS_APPROX(dm4=dm4+m2*refMat3, refMat4=refMat4+refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4+=m2*refMat3, refMat4+=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4-=m2*refMat3, refMat4-=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4.noalias()+=m2*refMat3, refMat4+=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4.noalias()-=m2*refMat3, refMat4-=refMat2*refMat3);
     VERIFY_IS_APPROX(dm4=m2*(refMat3+refMat3), refMat4=refMat2*(refMat3+refMat3));
     VERIFY_IS_APPROX(dm4=m2t.transpose()*(refMat3+refMat5)*0.5, refMat4=refMat2t.transpose()*(refMat3+refMat5)*0.5);
     
@@ -98,6 +156,9 @@ template<typename SparseMatrixType> void sparse_product()
     VERIFY_IS_APPROX(dm4=refMat2*m3, refMat4=refMat2*refMat3);
     VERIFY_IS_APPROX(dm4=dm4+refMat2*m3, refMat4=refMat4+refMat2*refMat3);
     VERIFY_IS_APPROX(dm4+=refMat2*m3, refMat4+=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4-=refMat2*m3, refMat4-=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4.noalias()+=refMat2*m3, refMat4+=refMat2*refMat3);
+    VERIFY_IS_APPROX(dm4.noalias()-=refMat2*m3, refMat4-=refMat2*refMat3);
     VERIFY_IS_APPROX(dm4=refMat2*m3t.transpose(), refMat4=refMat2*refMat3t.transpose());
     VERIFY_IS_APPROX(dm4=refMat2t.transpose()*m3, refMat4=refMat2t.transpose()*refMat3);
     VERIFY_IS_APPROX(dm4=refMat2t.transpose()*m3t.transpose(), refMat4=refMat2t.transpose()*refMat3t.transpose());
@@ -180,12 +241,16 @@ template<typename SparseMatrixType> void sparse_product()
     // also check with a SparseWrapper:
     DenseVector v1 = DenseVector::Random(cols);
     DenseVector v2 = DenseVector::Random(rows);
+    DenseVector v3 = DenseVector::Random(rows);
     VERIFY_IS_APPROX(m3=m2*v1.asDiagonal(), refM3=refM2*v1.asDiagonal());
     VERIFY_IS_APPROX(m3=m2.transpose()*v2.asDiagonal(), refM3=refM2.transpose()*v2.asDiagonal());
     VERIFY_IS_APPROX(m3=v2.asDiagonal()*m2, refM3=v2.asDiagonal()*refM2);
     VERIFY_IS_APPROX(m3=v1.asDiagonal()*m2.transpose(), refM3=v1.asDiagonal()*refM2.transpose());
     
     VERIFY_IS_APPROX(m3=v2.asDiagonal()*m2*v1.asDiagonal(), refM3=v2.asDiagonal()*refM2*v1.asDiagonal());
+
+    VERIFY_IS_APPROX(v2=m2*v1.asDiagonal()*v1, refM2*v1.asDiagonal()*v1);
+    VERIFY_IS_APPROX(v3=v2.asDiagonal()*m2*v1, v2.asDiagonal()*refM2*v1);
     
     // evaluate to a dense matrix to check the .row() and .col() iterator functions
     VERIFY_IS_APPROX(d3=m2*d1, refM3=refM2*d1);
@@ -194,7 +259,7 @@ template<typename SparseMatrixType> void sparse_product()
     VERIFY_IS_APPROX(d3=d1*m2.transpose(), refM3=d1*refM2.transpose());
   }
 
-  // test self-adjoint and traingular-view products
+  // test self-adjoint and triangular-view products
   {
     DenseMatrix b = DenseMatrix::Random(rows, rows);
     DenseMatrix x = DenseMatrix::Random(rows, rows);
@@ -220,7 +285,7 @@ template<typename SparseMatrixType> void sparse_product()
     for (int k=0; k<mS.outerSize(); ++k)
       for (typename SparseMatrixType::InnerIterator it(mS,k); it; ++it)
         if (it.index() == k)
-          it.valueRef() *= 0.5;
+          it.valueRef() *= Scalar(0.5);
 
     VERIFY_IS_APPROX(refS.adjoint(), refS);
     VERIFY_IS_APPROX(mS.adjoint(), mS);
@@ -231,6 +296,14 @@ template<typename SparseMatrixType> void sparse_product()
     VERIFY_IS_APPROX(x=mUp.template selfadjointView<Upper>()*b, refX=refS*b);
     VERIFY_IS_APPROX(x=mLo.template selfadjointView<Lower>()*b, refX=refS*b);
     VERIFY_IS_APPROX(x=mS.template selfadjointView<Upper|Lower>()*b, refX=refS*b);
+
+    VERIFY_IS_APPROX(x=b * mUp.template selfadjointView<Upper>(),       refX=b*refS);
+    VERIFY_IS_APPROX(x=b * mLo.template selfadjointView<Lower>(),       refX=b*refS);
+    VERIFY_IS_APPROX(x=b * mS.template selfadjointView<Upper|Lower>(),  refX=b*refS);
+
+    VERIFY_IS_APPROX(x.noalias()+=mUp.template selfadjointView<Upper>()*b, refX+=refS*b);
+    VERIFY_IS_APPROX(x.noalias()-=mLo.template selfadjointView<Lower>()*b, refX-=refS*b);
+    VERIFY_IS_APPROX(x.noalias()+=mS.template selfadjointView<Upper|Lower>()*b, refX+=refS*b);
     
     // sparse selfadjointView with sparse matrices
     SparseMatrixType mSres(rows,rows);
@@ -275,11 +348,35 @@ template<typename SparseMatrixType, typename DenseMatrixType> void sparse_produc
   VERIFY_IS_APPROX( m4(0,0), 0.0 );
 }
 
+template<typename Scalar>
+void bug_942()
+{
+  typedef Matrix<Scalar, Dynamic, 1>     Vector;
+  typedef SparseMatrix<Scalar, ColMajor> ColSpMat;
+  typedef SparseMatrix<Scalar, RowMajor> RowSpMat;
+  ColSpMat cmA(1,1);
+  cmA.insert(0,0) = 1;
+
+  RowSpMat rmA(1,1);
+  rmA.insert(0,0) = 1;
+
+  Vector d(1);
+  d[0] = 2;
+  
+  double res = 2;
+  
+  VERIFY_IS_APPROX( ( cmA*d.asDiagonal() ).eval().coeff(0,0), res );
+  VERIFY_IS_APPROX( ( d.asDiagonal()*rmA ).eval().coeff(0,0), res );
+  VERIFY_IS_APPROX( ( rmA*d.asDiagonal() ).eval().coeff(0,0), res );
+  VERIFY_IS_APPROX( ( d.asDiagonal()*cmA ).eval().coeff(0,0), res );
+}
+
 void test_sparse_product()
 {
   for(int i = 0; i < g_repeat; i++) {
     CALL_SUBTEST_1( (sparse_product<SparseMatrix<double,ColMajor> >()) );
     CALL_SUBTEST_1( (sparse_product<SparseMatrix<double,RowMajor> >()) );
+    CALL_SUBTEST_1( (bug_942<double>()) );
     CALL_SUBTEST_2( (sparse_product<SparseMatrix<std::complex<double>, ColMajor > >()) );
     CALL_SUBTEST_2( (sparse_product<SparseMatrix<std::complex<double>, RowMajor > >()) );
     CALL_SUBTEST_3( (sparse_product<SparseMatrix<float,ColMajor,long int> >()) );

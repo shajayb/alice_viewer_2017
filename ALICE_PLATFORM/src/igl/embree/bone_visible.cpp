@@ -6,9 +6,10 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can 
 // obtain one at http://mozilla.org/MPL/2.0/.
 #include "bone_visible.h"
-#include <igl/project_to_line.h>
-#include <igl/EPS.h>
-#include <igl/Timer.h>
+#include "../project_to_line.h"
+#include "../EPS.h"
+#include "../Hit.h"
+#include "../Timer.h"
 #include <iostream>
 
 template <
@@ -16,7 +17,7 @@ template <
   typename DerivedF, 
   typename DerivedSD,
   typename Derivedflag>
-IGL_INLINE void igl::bone_visible(
+IGL_INLINE void igl::embree::bone_visible(
   const Eigen::PlainObjectBase<DerivedV> & V,
   const Eigen::PlainObjectBase<DerivedF> & F,
   const Eigen::PlainObjectBase<DerivedSD> & s,
@@ -24,7 +25,7 @@ IGL_INLINE void igl::bone_visible(
   Eigen::PlainObjectBase<Derivedflag>  & flag)
 {
   // "double sided lighting"
-  Eigen::PlainObjectBase<DerivedF> FF;
+  Eigen::Matrix<typename DerivedF::Scalar,Eigen::Dynamic,Eigen::Dynamic> FF;
   FF.resize(F.rows()*2,F.cols());
   FF << F, F.rowwise().reverse();
   // Initialize intersector
@@ -38,15 +39,14 @@ template <
   typename DerivedF, 
   typename DerivedSD,
   typename Derivedflag>
-IGL_INLINE void igl::bone_visible(
+IGL_INLINE void igl::embree::bone_visible(
   const Eigen::PlainObjectBase<DerivedV> & V,
   const Eigen::PlainObjectBase<DerivedF> & F,
-  const igl::EmbreeIntersector & ei,
+  const EmbreeIntersector & ei,
   const Eigen::PlainObjectBase<DerivedSD> & s,
   const Eigen::PlainObjectBase<DerivedSD> & d,
   Eigen::PlainObjectBase<Derivedflag>  & flag)
 {
-  using namespace igl;
   using namespace std;
   using namespace Eigen;
   flag.resize(V.rows());
@@ -139,7 +139,7 @@ IGL_INLINE void igl::bone_visible(
 }
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template instanciation
-template void igl::bone_visible<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, 3, 1, 0, 3, 1>, Eigen::Matrix<bool, -1, 1, 0, -1, 1> >(Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, 3, 1, 0, 3, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, 3, 1, 0, 3, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<bool, -1, 1, 0, -1, 1> >&);
-template void igl::bone_visible<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, 1, 0, -1, 1>, Eigen::Matrix<bool, -1, 1, 0, -1, 1> >(Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 1, 0, -1, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 1, 0, -1, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<bool, -1, 1, 0, -1, 1> >&);
+// Explicit template instantiation
+template void igl::embree::bone_visible<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, 3, 1, 0, 3, 1>, Eigen::Matrix<bool, -1, 1, 0, -1, 1> >(Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, 3, 1, 0, 3, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, 3, 1, 0, 3, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<bool, -1, 1, 0, -1, 1> >&);
+template void igl::embree::bone_visible<Eigen::Matrix<double, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<double, -1, 1, 0, -1, 1>, Eigen::Matrix<bool, -1, 1, 0, -1, 1> >(Eigen::PlainObjectBase<Eigen::Matrix<double, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 1, 0, -1, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<double, -1, 1, 0, -1, 1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<bool, -1, 1, 0, -1, 1> >&);
 #endif

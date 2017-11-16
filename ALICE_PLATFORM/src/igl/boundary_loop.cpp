@@ -19,15 +19,14 @@ IGL_INLINE void igl::boundary_loop(
 {
   using namespace std;
   using namespace Eigen;
-  using namespace igl;
 
   if(F.rows() == 0)
     return;
 
-  MatrixXd Vdummy(F.maxCoeff()+1,1);
-  MatrixXi TT,TTi;
+  VectorXd Vdummy(F.maxCoeff()+1,1);
+  DerivedF TT,TTi;
   vector<std::vector<int> > VF, VFi;
-  triangle_triangle_adjacency(Vdummy,F,TT,TTi);
+  triangle_triangle_adjacency(F,TT,TTi);
   vertex_triangle_adjacency(Vdummy,F,VF,VFi);
 
   vector<bool> unvisited = is_border_vertex(Vdummy,F);
@@ -115,6 +114,13 @@ IGL_INLINE void igl::boundary_loop(
     }
   }
 
+  //Check for meshes without boundary
+  if (idxMax == -1)
+  {
+      L.clear();
+      return;
+  }
+
   L.resize(Lall[idxMax].size());
   for (size_t i = 0; i < Lall[idxMax].size(); ++i)
   {
@@ -142,6 +148,6 @@ IGL_INLINE void igl::boundary_loop(
 }
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
+// Explicit template instantiation
 template void igl::boundary_loop<Eigen::Matrix<int, -1, -1, 0, -1, -1>, Eigen::Matrix<int, -1, 1, 0, -1, 1> >(Eigen::PlainObjectBase<Eigen::Matrix<int, -1, -1, 0, -1, -1> > const&, Eigen::PlainObjectBase<Eigen::Matrix<int, -1, 1, 0, -1, 1> >&);
 #endif

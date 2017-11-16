@@ -59,20 +59,21 @@ bool bicgstab(const MatrixType& mat, const Rhs& rhs, Dest& x,
 
   VectorType s(n), t(n);
 
-  RealScalar tol2 = tol*tol;
+  RealScalar tol2 = tol*tol*rhs_sqnorm;
   RealScalar eps2 = NumTraits<Scalar>::epsilon()*NumTraits<Scalar>::epsilon();
   Index i = 0;
   Index restarts = 0;
 
-  while ( r.squaredNorm()/rhs_sqnorm > tol2 && i<maxIters )
+  while ( r.squaredNorm() > tol2 && i<maxIters )
   {
     Scalar rho_old = rho;
 
     rho = r0.dot(r);
     if (abs(rho) < eps2*r0_sqnorm)
     {
-      // The new residual vector became too orthogonal to the arbitrarily choosen direction r0
+      // The new residual vector became too orthogonal to the arbitrarily chosen direction r0
       // Let's restart with a new r0:
+      r  = rhs - mat * x;
       r0 = r;
       rho = r0_sqnorm = r.squaredNorm();
       if(restarts++ == 0)
@@ -131,9 +132,17 @@ struct traits<BiCGSTAB<_MatrixType,_Preconditioner> >
   * \tparam _MatrixType the type of the sparse matrix A, can be a dense or a sparse matrix.
   * \tparam _Preconditioner the type of the preconditioner. Default is DiagonalPreconditioner
   *
+  * \implsparsesolverconcept
+  *
   * The maximal number of iterations and tolerance value can be controlled via the setMaxIterations()
   * and setTolerance() methods. The defaults are the size of the problem for the maximal number of iterations
   * and NumTraits<Scalar>::epsilon() for the tolerance.
+  * 
+  * The tolerance corresponds to the relative residual error: |Ax-b|/|b|
+  * 
+  * \b Performance: when using sparse matrices, best performance is achied for a row-major sparse matrix format.
+  * Moreover, in this case multi-threading can be exploited if the user code is compiled with OpenMP enabled.
+  * See \ref TopicMultiThreading for details.
   * 
   * This class can be used as the direct solver classes. Here is a typical usage example:
   * \include BiCGSTAB_simple.cpp
@@ -141,13 +150,15 @@ struct traits<BiCGSTAB<_MatrixType,_Preconditioner> >
   * By default the iterations start with x=0 as an initial guess of the solution.
   * One can control the start using the solveWithGuess() method.
   * 
+  * BiCGSTAB can also be used in a matrix-free context, see the following \link MatrixfreeSolverExample example \endlink.
+  *
   * \sa class SimplicialCholesky, DiagonalPreconditioner, IdentityPreconditioner
   */
 template< typename _MatrixType, typename _Preconditioner>
 class BiCGSTAB : public IterativeSolverBase<BiCGSTAB<_MatrixType,_Preconditioner> >
 {
   typedef IterativeSolverBase<BiCGSTAB> Base;
-  using Base::mp_matrix;
+  using Base::matrix;
   using Base::m_error;
   using Base::m_iterations;
   using Base::m_info;
@@ -173,7 +184,8 @@ public:
     * this class becomes invalid. Call compute() to update it with the new
     * matrix A, or modify a copy of A.
     */
-  explicit BiCGSTAB(const MatrixType& A) : Base(A) {}
+  template<typename MatrixDerived>
+  explicit BiCGSTAB(const EigenBase<MatrixDerived>& A) : Base(A.derived()) {}
 
   ~BiCGSTAB() {}
 
@@ -188,7 +200,7 @@ public:
       m_error = Base::m_tolerance;
       
       typename Dest::ColXpr xj(x,j);
-      if(!internal::bicgstab(mp_matrix, b.col(j), xj, Base::m_preconditioner, m_iterations, m_error))
+      if(!internal::bicgstab(matrix(), b.col(j), xj, Base::m_preconditioner, m_iterations, m_error))
         failed = true;
     }
     m_info = failed ? NumericalIssue
@@ -202,8 +214,8 @@ public:
   template<typename Rhs,typename Dest>
   void _solve_impl(const MatrixBase<Rhs>& b, Dest& x) const
   {
-    // x.setZero();
-    x = b;
+    x.resize(this->rows(),b.cols());
+    x.setZero();
     _solve_with_guess_impl(b,x);
   }
 

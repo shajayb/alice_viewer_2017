@@ -8,32 +8,17 @@
 
 #include "OpenGL_shader.h"
 
-#ifndef __APPLE__
-#  define GLEW_STATIC
-#  include <GL/glew.h>
-#endif
-
-#ifdef __APPLE__
-#   include <OpenGL/gl3.h>
-#   define __gl_h_ /* Prevent inclusion of the old gl.h */
-#else
-#   ifdef _WIN32
-#       include <windows.h>
-#   endif
-#   include <GL/gl.h>
-#endif
-
 #include <iostream>
 #include <fstream>
 
-IGL_INLINE bool igl::OpenGL_shader::init_from_files(
+IGL_INLINE bool igl::viewer::OpenGL_shader::init_from_files(
   const std::string &vertex_shader_filename,
   const std::string &fragment_shader_filename,
   const std::string &fragment_data_name,
   const std::string &geometry_shader_filename,
   int geometry_shader_max_vertices)
 {
-  auto file_to_string = [](const std::string &filename)
+  auto file_to_string = [](const std::string &filename)->std::string
   {
     std::ifstream t(filename);
     return std::string((std::istreambuf_iterator<char>(t)),
@@ -49,7 +34,7 @@ IGL_INLINE bool igl::OpenGL_shader::init_from_files(
  );
 }
 
-IGL_INLINE bool igl::OpenGL_shader::init(
+IGL_INLINE bool igl::viewer::OpenGL_shader::init(
   const std::string &vertex_shader_string,
   const std::string &fragment_shader_string,
   const std::string &fragment_data_name,
@@ -97,22 +82,22 @@ IGL_INLINE bool igl::OpenGL_shader::init(
   return true;
 }
 
-IGL_INLINE void igl::OpenGL_shader::bind()
+IGL_INLINE void igl::viewer::OpenGL_shader::bind()
 {
   glUseProgram(program_shader);
 }
 
-IGL_INLINE GLint igl::OpenGL_shader::attrib(const std::string &name) const
+IGL_INLINE GLint igl::viewer::OpenGL_shader::attrib(const std::string &name) const
 {
   return glGetAttribLocation(program_shader, name.c_str());
 }
 
-IGL_INLINE GLint igl::OpenGL_shader::uniform(const std::string &name) const
+IGL_INLINE GLint igl::viewer::OpenGL_shader::uniform(const std::string &name) const
 {
   return glGetUniformLocation(program_shader, name.c_str());
 }
 
-IGL_INLINE GLint igl::OpenGL_shader::bindVertexAttribArray(
+IGL_INLINE GLint igl::viewer::OpenGL_shader::bindVertexAttribArray(
   const std::string &name, GLuint bufferID, const Eigen::MatrixXf &M, bool refresh) const
 {
   GLint id = attrib(name);
@@ -131,7 +116,7 @@ IGL_INLINE GLint igl::OpenGL_shader::bindVertexAttribArray(
   return id;
 }
 
-IGL_INLINE void igl::OpenGL_shader::free()
+IGL_INLINE void igl::viewer::OpenGL_shader::free()
 {
   if (program_shader)
   {
@@ -155,7 +140,7 @@ IGL_INLINE void igl::OpenGL_shader::free()
   }
 }
 
-IGL_INLINE GLuint igl::OpenGL_shader::create_shader_helper(GLint type, const std::string &shader_string)
+IGL_INLINE GLuint igl::viewer::OpenGL_shader::create_shader_helper(GLint type, const std::string &shader_string)
 {
   using namespace std;
   if (shader_string.empty())

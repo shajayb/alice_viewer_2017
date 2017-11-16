@@ -8,6 +8,7 @@
 #ifndef IGL_READOBJ_H
 #define IGL_READOBJ_H
 #include "igl_inline.h"
+#include "deprecated.h"
 // History:
 //  return type changed from void to bool  Alec 18 Sept 2011
 //  added pure vector of vectors version that has much more support Alec 31 Oct
@@ -18,6 +19,7 @@
 #endif
 #include <string>
 #include <vector>
+#include <cstdio>
 
 namespace igl 
 {
@@ -32,15 +34,28 @@ namespace igl
   //  str  path to .obj file
   // Outputs:
   //   V  double matrix of vertex positions  #V by 3
-  //   F  #F list of face indices into vertex positions
   //   TC  double matrix of texture coordinats #TC by 2
-  //   FTC  #F list of face indices into vertex texture coordinates
   //   N  double matrix of corner normals #N by 3
+  //   F  #F list of face indices into vertex positions
+  //   FTC  #F list of face indices into vertex texture coordinates
   //   FN  #F list of face indices into vertex normals
   // Returns true on success, false on errors
   template <typename Scalar, typename Index>
   IGL_INLINE bool readOBJ(
     const std::string obj_file_name, 
+    std::vector<std::vector<Scalar > > & V,
+    std::vector<std::vector<Scalar > > & TC,
+    std::vector<std::vector<Scalar > > & N,
+    std::vector<std::vector<Index > > & F,
+    std::vector<std::vector<Index > > & FTC,
+    std::vector<std::vector<Index > > & FN);
+  // Inputs:
+  //   obj_file  pointer to already opened .obj file 
+  // Outputs:
+  //   obj_file  closed file
+  template <typename Scalar, typename Index>
+  IGL_INLINE bool readOBJ(
+    FILE * obj_file,
     std::vector<std::vector<Scalar > > & V,
     std::vector<std::vector<Scalar > > & TC,
     std::vector<std::vector<Scalar > > & N,
@@ -53,78 +68,29 @@ namespace igl
     const std::string obj_file_name, 
     std::vector<std::vector<Scalar > > & V,
     std::vector<std::vector<Index > > & F);
-
-#ifndef IGL_NO_EIGEN
-  //! Read a mesh from an ascii obj file
-  // Inputs:
-  //   str  path to .obj file
-  // Outputs:
-  //   V  eigen matrix #V by 3
-  //   F  eigen matrix #F by 3
-  //
-  // KNOWN BUG: This only knows how to read *triangle* meshes. It will probably
-  // crash or give garbage on anything else.
-  //
-  // KNOWN BUG: This only knows how to face lines without normal or texture
-  // indices. It will probably crash or give garbage on anything else.
-  //
-  // KNOWN BUG: The order of the attributes is different than the vector
-  // version above
-  template <typename DerivedV, typename DerivedF, typename DerivedT>
+  // Eigen Wrappers. These will return true only if the data is perfectly
+  // "rectangular": All faces are the same degree, all have the same number of
+  // textures/normals etc.
+  template <
+    typename DerivedV, 
+    typename DerivedTC, 
+    typename DerivedCN, 
+    typename DerivedF,
+    typename DerivedFTC,
+    typename DerivedFN>
   IGL_INLINE bool readOBJ(
     const std::string str,
     Eigen::PlainObjectBase<DerivedV>& V,
+    Eigen::PlainObjectBase<DerivedTC>& TC,
+    Eigen::PlainObjectBase<DerivedCN>& CN,
     Eigen::PlainObjectBase<DerivedF>& F,
-    Eigen::PlainObjectBase<DerivedV>& CN,
-    Eigen::PlainObjectBase<DerivedF>& FN,
-    Eigen::PlainObjectBase<DerivedT>& TC,
-    Eigen::PlainObjectBase<DerivedF>& FTC);
-
-  //! Read a poly mesh from an ascii obj file
-  // Inputs:
-  //   str  path to .obj file
-  // Outputs:
-  //   V  eigen matrix #V by 3
-  //   POLYF vector of vector with face indices
-  //
-  //
-  // KNOWN BUG: This only knows how to face lines without normal or texture
-  // indices. It will probably crash or give garbage on anything else.
-  //
-  // KNOWN BUG: The order of the attributes is different than the vector
-  // version above
-  template <
-    typename DerivedV, 
-    typename DerivedF, 
-    typename DerivedT, 
-    typename Index>
-  IGL_INLINE bool readOBJPoly(
-    const std::string str,
-    Eigen::PlainObjectBase<DerivedV>& V,
-    std::vector<std::vector<Index> >& F,
-    Eigen::PlainObjectBase<DerivedV>& CN,
-    Eigen::PlainObjectBase<DerivedF>& FN,
-    Eigen::PlainObjectBase<DerivedT>& TC,
-    Eigen::PlainObjectBase<DerivedF>& FTC);
-  
-  //! Read a mesh from an ascii obj file
-  // Inputs:
-  //   str  path to .obj file
-  // Outputs:
-  //   V  eigen matrix #V by 3
-  //   F  eigen matrix #F by 3
-  //
-  // KNOWN BUG: This only knows how to read *triangle* meshes. It will probably
-  // crash or give garbage on anything else.
-  //
-  // KNOWN BUG: This only knows how to face lines without normal or texture
-  // indices. It will probably crash or give garbage on anything else.
+    Eigen::PlainObjectBase<DerivedFTC>& FTC,
+    Eigen::PlainObjectBase<DerivedFN>& FN);
   template <typename DerivedV, typename DerivedF>
   IGL_INLINE bool readOBJ(
     const std::string str,
     Eigen::PlainObjectBase<DerivedV>& V,
     Eigen::PlainObjectBase<DerivedF>& F);
-#endif
 
 }
 

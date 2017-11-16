@@ -7,36 +7,46 @@
 // obtain one at http://mozilla.org/MPL/2.0/.
 #include "texture_from_png.h"
 
-#include <YImage.hpp>
-#include <igl/report_gl_error.h>
+#include "../opengl/report_gl_error.h"
+#include <igl_stb_image.h>
 
-#ifndef IGL_NO_OPENGL
-
-IGL_INLINE bool igl::texture_from_png(const std::string png_file, GLuint & id)
+IGL_INLINE bool igl::png::texture_from_png(const std::string png_file, const bool flip, GLuint & id)
 {
-  YImage yimg;
-  if(!yimg.load(png_file.c_str()))
-  {
+  int width,height,n;
+  unsigned char *data = igl::stbi_load(png_file.c_str(), &width, &height, &n, 4);
+  if(data == NULL) {
     return false;
   }
+
   // Why do I need to flip?
-  //yimg.flip();
+  /*if(flip)
+  {
+    yimg.flip();
+  }*/
+
   glGenTextures(1, &id);
   glBindTexture(GL_TEXTURE_2D, id);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexImage2D(
     GL_TEXTURE_2D, 0, GL_RGB,
-    yimg.width(), yimg.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, yimg.data());
+    width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
   glBindTexture(GL_TEXTURE_2D, 0);
+
+  igl::stbi_image_free(data);
+
   return true;
 }
 
-#endif
+IGL_INLINE bool igl::png::texture_from_png(const std::string png_file, GLuint & id)
+{
+  return texture_from_png(png_file,false,id);
+}
 
-IGL_INLINE bool igl::texture_from_png(
+
+IGL_INLINE bool igl::png::texture_from_png(
   const std::string png_file,
   Eigen::Matrix<char,Eigen::Dynamic,Eigen::Dynamic>& R,
   Eigen::Matrix<char,Eigen::Dynamic,Eigen::Dynamic>& G,
@@ -44,27 +54,30 @@ IGL_INLINE bool igl::texture_from_png(
   Eigen::Matrix<char,Eigen::Dynamic,Eigen::Dynamic>& A
 )
 {
-  YImage yimg;
-  if(!yimg.load(png_file.c_str()))
-  {
+  int width,height,n;
+  unsigned char *data = igl::stbi_load(png_file.c_str(), &width, &height, &n, 4);
+  if(data == NULL) {
     return false;
   }
 
-  R.resize(yimg.height(),yimg.width());
-  G.resize(yimg.height(),yimg.width());
-  B.resize(yimg.height(),yimg.width());
-  A.resize(yimg.height(),yimg.width());
+  R.resize(height,width);
+  G.resize(height,width);
+  B.resize(height,width);
+  A.resize(height,width);
 
-  for (unsigned j=0; j<yimg.height(); ++j)
-  {
-    for (unsigned i=0; i<yimg.width(); ++i)
-    {
-      R(i,j) = yimg.at(yimg.width()-1-i,yimg.height()-1-j).r;
-      G(i,j) = yimg.at(yimg.width()-1-i,yimg.height()-1-j).g;
-      B(i,j) = yimg.at(yimg.width()-1-i,yimg.height()-1-j).b;
-      //1A(i,j) = yimg.at(yimg.width()-1-i,yimg.height()-1-j).a;
+  for (unsigned j=0; j<height; ++j) {
+    for (unsigned i=0; i<width; ++i) {
+      // used to flip with libPNG, but I'm not sure if
+      // simply j*width + i wouldn't be better
+      // stb_image uses horizontal scanline an starts top-left corner
+      R(i,j) = data[4*( (width-1-i) + width * (height-1-j) )];
+      G(i,j) = data[4*( (width-1-i) + width * (height-1-j) ) + 1];
+      B(i,j) = data[4*( (width-1-i) + width * (height-1-j) ) + 2];
+      //A(i,j) = data[4*( (width-1-i) + width * (height-1-j) ) + 3];
     }
   }
+
+  igl::stbi_image_free(data);
 
   return true;
 }

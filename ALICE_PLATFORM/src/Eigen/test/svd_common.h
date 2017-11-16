@@ -16,6 +16,8 @@
 #error a macro SVD_FOR_MIN_NORM(MatrixType) must be defined prior to including svd_common.h
 #endif
 
+#include "svd_fill.h"
+
 // Check that the matrix m is properly reconstructed and that the U and V factors are unitary
 // The SVD must have already been computed.
 template<typename SvdType, typename MatrixType>
@@ -31,6 +33,7 @@ void svd_check_full(const MatrixType& m, const SvdType& svd)
   };
 
   typedef typename MatrixType::Scalar Scalar;
+  typedef typename MatrixType::RealScalar RealScalar;
   typedef Matrix<Scalar, RowsAtCompileTime, RowsAtCompileTime> MatrixUType;
   typedef Matrix<Scalar, ColsAtCompileTime, ColsAtCompileTime> MatrixVType;
 
@@ -38,7 +41,15 @@ void svd_check_full(const MatrixType& m, const SvdType& svd)
   sigma.diagonal() = svd.singularValues().template cast<Scalar>();
   MatrixUType u = svd.matrixU();
   MatrixVType v = svd.matrixV();
-  VERIFY_IS_APPROX(m, u * sigma * v.adjoint());
+  RealScalar scaling = m.cwiseAbs().maxCoeff();
+  if(scaling<(std::numeric_limits<RealScalar>::min)())
+  {
+    VERIFY(sigma.cwiseAbs().maxCoeff() <= (std::numeric_limits<RealScalar>::min)());
+  }
+  else
+  {
+    VERIFY_IS_APPROX(m/scaling, u * (sigma/scaling) * v.adjoint());
+  }
   VERIFY_IS_UNITARY(u);
   VERIFY_IS_UNITARY(v);
 }
@@ -49,18 +60,39 @@ void svd_compare_to_full(const MatrixType& m,
                          unsigned int computationOptions,
                          const SvdType& referenceSvd)
 {
-  typedef typename MatrixType::Index Index;
+  typedef typename MatrixType::RealScalar RealScalar;
   Index rows = m.rows();
   Index cols = m.cols();
   Index diagSize = (std::min)(rows, cols);
+  RealScalar prec = test_precision<RealScalar>();
 
   SvdType svd(m, computationOptions);
 
   VERIFY_IS_APPROX(svd.singularValues(), referenceSvd.singularValues());
+  
+  if(computationOptions & (ComputeFullV|ComputeThinV))
+  {
+    VERIFY( (svd.matrixV().adjoint()*svd.matrixV()).isIdentity(prec) );
+    VERIFY_IS_APPROX( svd.matrixV().leftCols(diagSize) * svd.singularValues().asDiagonal() * svd.matrixV().leftCols(diagSize).adjoint(),
+                      referenceSvd.matrixV().leftCols(diagSize) * referenceSvd.singularValues().asDiagonal() * referenceSvd.matrixV().leftCols(diagSize).adjoint());
+  }
+  
+  if(computationOptions & (ComputeFullU|ComputeThinU))
+  {
+    VERIFY( (svd.matrixU().adjoint()*svd.matrixU()).isIdentity(prec) );
+    VERIFY_IS_APPROX( svd.matrixU().leftCols(diagSize) * svd.singularValues().cwiseAbs2().asDiagonal() * svd.matrixU().leftCols(diagSize).adjoint(),
+                      referenceSvd.matrixU().leftCols(diagSize) * referenceSvd.singularValues().cwiseAbs2().asDiagonal() * referenceSvd.matrixU().leftCols(diagSize).adjoint());
+  }
+  
+  // The following checks are not critical.
+  // For instance, with Dived&Conquer SVD, if only the factor 'V' is computedt then different matrix-matrix product implementation will be used
+  // and the resulting 'V' factor might be significantly different when the SVD decomposition is not unique, especially with single precision float.
+  ++g_test_level;
   if(computationOptions & ComputeFullU)  VERIFY_IS_APPROX(svd.matrixU(), referenceSvd.matrixU());
   if(computationOptions & ComputeThinU)  VERIFY_IS_APPROX(svd.matrixU(), referenceSvd.matrixU().leftCols(diagSize));
-  if(computationOptions & ComputeFullV)  VERIFY_IS_APPROX(svd.matrixV(), referenceSvd.matrixV());
+  if(computationOptions & ComputeFullV)  VERIFY_IS_APPROX(svd.matrixV().cwiseAbs(), referenceSvd.matrixV().cwiseAbs());
   if(computationOptions & ComputeThinV)  VERIFY_IS_APPROX(svd.matrixV(), referenceSvd.matrixV().leftCols(diagSize));
+  --g_test_level;
 }
 
 //
@@ -85,33 +117,48 @@ void svd_least_square(const MatrixType& m, unsigned int computationOptions)
   SvdType svd(m, computationOptions);
 
        if(internal::is_same<RealScalar,double>::value) svd.setThreshold(1e-8);
-  else if(internal::is_same<RealScalar,float>::value)  svd.setThreshold(1e-4);
-  
+  else if(internal::is_same<RealScalar,float>::value)  svd.setThreshold(2e-4);
+
   SolutionType x = svd.solve(rhs);
-  
-  // evaluate normal equation which works also for least-squares solutions
-  if(internal::is_same<RealScalar,double>::value || svd.rank()==m.diagonal().size())
-  {
-    // This test is not stable with single precision.
-    // This is probably because squaring m signicantly affects the precision.
-    VERIFY_IS_APPROX(m.adjoint()*(m*x),m.adjoint()*rhs);
-  }
-  
+   
   RealScalar residual = (m*x-rhs).norm();
-  // Check that there is no significantly better solution in the neighborhood of x
+  RealScalar rhs_norm = rhs.norm();
   if(!test_isMuchSmallerThan(residual,rhs.norm()))
   {
     // ^^^ If the residual is very small, then we have an exact solution, so we are already good.
+    
+    // evaluate normal equation which works also for least-squares solutions
+    if(internal::is_same<RealScalar,double>::value || svd.rank()==m.diagonal().size())
+    {
+      using std::sqrt;
+      // This test is not stable with single precision.
+      // This is probably because squaring m signicantly affects the precision.      
+      if(internal::is_same<RealScalar,float>::value) ++g_test_level;
+      
+      VERIFY_IS_APPROX(m.adjoint()*(m*x),m.adjoint()*rhs);
+      
+      if(internal::is_same<RealScalar,float>::value) --g_test_level;
+    }
+    
+    // Check that there is no significantly better solution in the neighborhood of x
     for(Index k=0;k<x.rows();++k)
     {
-      SolutionType y(x);
-      y.row(k) = (1.+2*NumTraits<RealScalar>::epsilon())*x.row(k);
-      RealScalar residual_y = (m*y-rhs).norm();
-      VERIFY( test_isApprox(residual_y,residual) || residual < residual_y );
+      using std::abs;
       
-      y.row(k) = (1.-2*NumTraits<RealScalar>::epsilon())*x.row(k);
-      residual_y = (m*y-rhs).norm();
+      SolutionType y(x);
+      y.row(k) = (RealScalar(1)+2*NumTraits<RealScalar>::epsilon())*x.row(k);
+      RealScalar residual_y = (m*y-rhs).norm();
+      VERIFY( test_isMuchSmallerThan(abs(residual_y-residual), rhs_norm) || residual < residual_y );
+      if(internal::is_same<RealScalar,float>::value) ++g_test_level;
       VERIFY( test_isApprox(residual_y,residual) || residual < residual_y );
+      if(internal::is_same<RealScalar,float>::value) --g_test_level;
+      
+      y.row(k) = (RealScalar(1)-2*NumTraits<RealScalar>::epsilon())*x.row(k);
+      residual_y = (m*y-rhs).norm();
+      VERIFY( test_isMuchSmallerThan(abs(residual_y-residual), rhs_norm) || residual < residual_y );
+      if(internal::is_same<RealScalar,float>::value) ++g_test_level;
+      VERIFY( test_isApprox(residual_y,residual) || residual < residual_y );
+      if(internal::is_same<RealScalar,float>::value) --g_test_level;
     }
   }
 }
@@ -221,65 +268,6 @@ void svd_test_all_computation_options(const MatrixType& m, bool full_only)
   }
 }
 
-template<typename MatrixType>
-void svd_fill_random(MatrixType &m)
-{
-  typedef typename MatrixType::Scalar Scalar;
-  typedef typename MatrixType::RealScalar RealScalar;
-  typedef typename MatrixType::Index Index;
-  Index diagSize = (std::min)(m.rows(), m.cols());
-  RealScalar s = std::numeric_limits<RealScalar>::max_exponent10/4;
-  s = internal::random<RealScalar>(1,s);
-  Matrix<RealScalar,Dynamic,1> d =  Matrix<RealScalar,Dynamic,1>::Random(diagSize);
-  for(Index k=0; k<diagSize; ++k)
-    d(k) = d(k)*std::pow(RealScalar(10),internal::random<RealScalar>(-s,s));
-
-  bool dup     = internal::random<int>(0,10) < 3;
-  bool unit_uv = internal::random<int>(0,10) < (dup?7:3); // if we duplicate some diagonal entries, then increase the chance to preserve them using unitary U and V factors
-  
-  // duplicate some singular values
-  if(dup)
-  {
-    Index n = internal::random<Index>(0,d.size()-1);
-    for(Index i=0; i<n; ++i)
-      d(internal::random<Index>(0,d.size()-1)) = d(internal::random<Index>(0,d.size()-1));
-  }
-  
-  Matrix<Scalar,Dynamic,Dynamic> U(m.rows(),diagSize);
-  Matrix<Scalar,Dynamic,Dynamic> VT(diagSize,m.cols());
-  if(unit_uv)
-  {
-    // in very rare cases let's try with a pure diagonal matrix
-    if(internal::random<int>(0,10) < 1)
-    {
-      U.setIdentity();
-      VT.setIdentity();
-    }
-    else
-    {
-      createRandomPIMatrixOfRank(diagSize,U.rows(), U.cols(), U);
-      createRandomPIMatrixOfRank(diagSize,VT.rows(), VT.cols(), VT);
-    }
-  }
-  else
-  {
-    U.setRandom();
-    VT.setRandom();
-  }
-  
-  m = U * d.asDiagonal() * VT;
-  
-  // (partly) cancel some coeffs
-  if(!(dup && unit_uv))
-  {
-    Matrix<Scalar,Dynamic,1> samples(7);
-    samples << 0, 5.60844e-313, -5.60844e-313, 4.94e-324, -4.94e-324, -1./NumTraits<RealScalar>::highest(), 1./NumTraits<RealScalar>::highest();
-    Index n = internal::random<Index>(0,m.size()-1);
-    for(Index i=0; i<n; ++i)
-      m(internal::random<Index>(0,m.rows()-1), internal::random<Index>(0,m.cols()-1)) = samples(internal::random<Index>(0,6));
-  }
-}
-
 
 // work around stupid msvc error when constructing at compile time an expression that involves
 // a division by zero, even if the numeric type has floating point
@@ -328,6 +316,7 @@ void svd_inf_nan()
 
 // Regression test for bug 286: JacobiSVD loops indefinitely with some
 // matrices containing denormal numbers.
+template<typename>
 void svd_underoverflow()
 {
 #if defined __INTEL_COMPILER
@@ -352,7 +341,7 @@ void svd_underoverflow()
     M << value_set(id(0)), value_set(id(1)), value_set(id(2)), value_set(id(3));
     svd.compute(M,ComputeFullU|ComputeFullV);
     CALL_SUBTEST( svd_check_full(M,svd) );
-    
+
     id(k)++;
     if(id(k)>=value_set.size())
     {
@@ -360,7 +349,7 @@ void svd_underoverflow()
       id.head(k).setZero();
       k=0;
     }
-    
+
   } while((id<int(value_set.size())).all());
   
 #if defined __INTEL_COMPILER
@@ -405,6 +394,7 @@ void svd_all_trivial_2x2( void (*cb)(const MatrixType&,bool) )
   } while((id<int(value_set.size())).all());
 }
 
+template<typename>
 void svd_preallocate()
 {
   Vector3f v(3.f, 2.f, 1.f);

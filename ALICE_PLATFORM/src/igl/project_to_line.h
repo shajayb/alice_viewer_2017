@@ -8,21 +8,17 @@
 #ifndef IGL_PROJECT_TO_LINE_H
 #define IGL_PROJECT_TO_LINE_H
 #include "igl_inline.h"
+#include <Eigen/Core>
 
 namespace igl
 {
-  // PROJECT_TO_LINES  project points onto vectors, that is find the paramter
+  // PROJECT_TO_LINE  project points onto vectors, that is find the paramter
   // t for a point p such that proj_p = (y-x).*t, additionally compute the
   // squared distance from p to the line of the vector, such that 
   // |p - proj_p|² = sqr_d
   //
-  // [T,sqrD] = project_to_lines(P,S,D)
+  // [T,sqrD] = project_to_line(P,S,D)
   //
-  // Templates:
-  //   MatP matrix template for P, implementing .cols(), .rows()
-  //   MatL matrix template for S and D, implementing .size(), .array(), .sum()
-  //   Matt matrix template for t 
-  //   MatsqrD matrix template for sqrD
   // Inputs:
   //   P  #P by dim list of points to be projected
   //   S  size dim start position of line vector
@@ -33,17 +29,18 @@ namespace igl
   //
   //
   template <
-    typename MatP, 
-    typename MatL, 
-    typename Matt, 
-    typename MatsqrD>
+    typename DerivedP, 
+    typename DerivedS, 
+    typename DerivedD, 
+    typename Derivedt, 
+    typename DerivedsqrD>
   IGL_INLINE void project_to_line(
-    const MatP & P,
-    const MatL & S,
-    const MatL & D,
-    Matt & t,
-    MatsqrD & sqrD);
-  
+    const Eigen::MatrixBase<DerivedP> & P,
+    const Eigen::MatrixBase<DerivedS> & S,
+    const Eigen::MatrixBase<DerivedD> & D,
+    Eigen::PlainObjectBase<Derivedt> & t,
+    Eigen::PlainObjectBase<DerivedsqrD> & sqrD);
+
   // Same as above but for a single query point
   template <typename Scalar>
   IGL_INLINE void project_to_line(

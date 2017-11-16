@@ -42,7 +42,7 @@ namespace Eigen {
  *  
  * If the input matrix has inf or nan coefficients, the result of the computation is undefined, but the computation is guaranteed to
  * terminate in finite (and reasonable) time.
- * \sa MatrixBase::genericSvd()
+ * \sa class BDCSVD, class JacobiSVD
  */
 template<typename Derived>
 class SVDBase
@@ -74,7 +74,7 @@ public:
   /** \returns the \a U matrix.
    *
    * For the SVD decomposition of a n-by-p matrix, letting \a m be the minimum of \a n and \a p,
-   * the U matrix is n-by-n if you asked for #ComputeFullU, and is n-by-m if you asked for #ComputeThinU.
+   * the U matrix is n-by-n if you asked for \link Eigen::ComputeFullU ComputeFullU \endlink, and is n-by-m if you asked for \link Eigen::ComputeThinU ComputeThinU \endlink.
    *
    * The \a m first columns of \a U are the left singular vectors of the matrix being decomposed.
    *
@@ -90,7 +90,7 @@ public:
   /** \returns the \a V matrix.
    *
    * For the SVD decomposition of a n-by-p matrix, letting \a m be the minimum of \a n and \a p,
-   * the V matrix is p-by-p if you asked for #ComputeFullV, and is p-by-m if you asked for ComputeThinV.
+   * the V matrix is p-by-p if you asked for \link Eigen::ComputeFullV ComputeFullV \endlink, and is p-by-m if you asked for \link Eigen::ComputeThinV ComputeThinV \endlink.
    *
    * The \a m first columns of \a V are the right singular vectors of the matrix being decomposed.
    *
@@ -132,7 +132,7 @@ public:
     using std::abs;
     eigen_assert(m_isInitialized && "JacobiSVD is not initialized.");
     if(m_singularValues.size()==0) return 0;
-    RealScalar premultiplied_threshold = m_singularValues.coeff(0) * threshold();
+    RealScalar premultiplied_threshold = numext::maxi<RealScalar>(m_singularValues.coeff(0) * threshold(), (std::numeric_limits<RealScalar>::min)());
     Index i = m_nonzeroSingularValues-1;
     while(i>=0 && m_singularValues.coeff(i) < premultiplied_threshold) --i;
     return i+1;
@@ -217,6 +217,12 @@ public:
   #endif
 
 protected:
+  
+  static void check_template_parameters()
+  {
+    EIGEN_STATIC_ASSERT_NON_INTEGER(Scalar);
+  }
+  
   // return true if already allocated
   bool allocate(Index rows, Index cols, unsigned int computationOptions) ;
 
@@ -240,7 +246,9 @@ protected:
       m_usePrescribedThreshold(false),
       m_computationOptions(0),
       m_rows(-1), m_cols(-1), m_diagSize(0)
-  {}
+  {
+    check_template_parameters();
+  }
 
 
 };

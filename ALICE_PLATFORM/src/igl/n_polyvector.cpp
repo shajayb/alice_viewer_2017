@@ -6,17 +6,19 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <igl/n_polyvector.h>
-#include <igl/edge_topology.h>
-#include <igl/local_basis.h>
-#include <igl/nchoosek.h>
-#include <igl/slice.h>
-#include <igl/polyroots.h>
-#include <igl/igl_inline.h>
+#include "LinSpaced.h"
+#include "n_polyvector.h"
+#include "edge_topology.h"
+#include "local_basis.h"
+#include "nchoosek.h"
+#include "slice.h"
+#include "polyroots.h"
+#include "igl_inline.h"
 #include <Eigen/Sparse>
 
 #include <Eigen/Geometry>
 #include <iostream>
+#include <complex>
 
 namespace igl {
   template <typename DerivedV, typename DerivedF>
@@ -38,7 +40,7 @@ namespace igl {
     Eigen::VectorXi indInteriorToFull;
     Eigen::VectorXi indFullToInterior;
 
-    Eigen::PlainObjectBase<DerivedV> B1, B2, FN;
+    DerivedV B1, B2, FN;
 
     IGL_INLINE void computek();
     IGL_INLINE void setFieldFromGeneralCoefficients(const  std::vector<Eigen::Matrix<std::complex<typename DerivedV::Scalar>, Eigen::Dynamic,1> > &coeffs,
@@ -99,7 +101,7 @@ precomputeInteriorEdges()
   // Flag border edges
   numInteriorEdges = 0;
   isBorderEdge.setZero(numE,1);
-  indFullToInterior = -1.*Eigen::VectorXi::Ones(numE,1);
+  indFullToInterior = -1*Eigen::VectorXi::Ones(numE,1);
 
   for(unsigned i=0; i<numE; ++i)
   {
@@ -345,8 +347,12 @@ IGL_INLINE void igl::PolyVectorFieldFinder<DerivedV, DerivedF>::getGeneralCoeffC
   Ck.resize(numConstrained,1);
   int n = cfW.cols()/3;
 
-  std::vector<std::vector<int> > allCombs;
-  igl::nchoosek(0,k+1,n,allCombs);
+  Eigen::MatrixXi allCombs;
+  {
+    Eigen::VectorXi V = igl::LinSpaced<Eigen::VectorXi >(n,0,n-1);
+    igl::nchoosek(V,k+1,allCombs);
+  }
+
 
   int ind = 0;
   for (int fi = 0; fi <numF; ++fi)
@@ -357,13 +363,13 @@ IGL_INLINE void igl::PolyVectorFieldFinder<DerivedV, DerivedF>::getGeneralCoeffC
     {
       std::complex<typename DerivedV::Scalar> ck(0);
 
-      for (int j = 0; j < allCombs.size(); ++j)
+      for (int j = 0; j < allCombs.rows(); ++j)
       {
         std::complex<typename DerivedV::Scalar> tk(1.);
         //collect products
-        for (int i = 0; i < allCombs[j].size(); ++i)
+        for (int i = 0; i < allCombs.cols(); ++i)
         {
-          int index = allCombs[j][i];
+          int index = allCombs(j,i);
 
           const Eigen::Matrix<typename DerivedV::Scalar, 1, 3> &w = cfW.block(fi,3*index,1,3);
           typename DerivedV::Scalar w0 = w.dot(b1);
@@ -508,5 +514,5 @@ IGL_INLINE void igl::n_polyvector(const Eigen::MatrixXd &V,
 
 
 #ifdef IGL_STATIC_LIBRARY
-// Explicit template specialization
+// Explicit template instantiation
 #endif

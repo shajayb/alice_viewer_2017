@@ -51,8 +51,11 @@ class CompressedStorage
     CompressedStorage& operator=(const CompressedStorage& other)
     {
       resize(other.size());
-      internal::smart_copy(other.m_values,  other.m_values  + m_size, m_values);
-      internal::smart_copy(other.m_indices, other.m_indices + m_size, m_indices);
+      if(other.size()>0)
+      {
+        internal::smart_copy(other.m_values,  other.m_values  + m_size, m_values);
+        internal::smart_copy(other.m_indices, other.m_indices + m_size, m_indices);
+      }
       return *this;
     }
 
@@ -86,7 +89,12 @@ class CompressedStorage
     void resize(Index size, double reserveSizeFactor = 0)
     {
       if (m_allocatedSize<size)
-        reallocate(size + Index(reserveSizeFactor*double(size)));
+      {
+        Index realloc_size = (std::min<Index>)(NumTraits<StorageIndex>::highest(),  size + Index(reserveSizeFactor*double(size)));
+        if(realloc_size<size)
+          internal::throw_std_bad_alloc();
+        reallocate(realloc_size);
+      }
       m_size = size;
     }
 
@@ -102,11 +110,16 @@ class CompressedStorage
     inline Index allocatedSize() const { return m_allocatedSize; }
     inline void clear() { m_size = 0; }
 
-    inline Scalar& value(Index i) { return m_values[i]; }
-    inline const Scalar& value(Index i) const { return m_values[i]; }
+    const Scalar* valuePtr() const { return m_values; }
+    Scalar* valuePtr() { return m_values; }
+    const StorageIndex* indexPtr() const { return m_indices; }
+    StorageIndex* indexPtr() { return m_indices; }
 
-    inline StorageIndex& index(Index i) { return m_indices[i]; }
-    inline const StorageIndex& index(Index i) const { return m_indices[i]; }
+    inline Scalar& value(Index i) { eigen_internal_assert(m_values!=0); return m_values[i]; }
+    inline const Scalar& value(Index i) const { eigen_internal_assert(m_values!=0); return m_values[i]; }
+
+    inline StorageIndex& index(Index i) { eigen_internal_assert(m_indices!=0); return m_indices[i]; }
+    inline const StorageIndex& index(Index i) const { eigen_internal_assert(m_indices!=0); return m_indices[i]; }
 
     /** \returns the largest \c k such that for all \c j in [0,k) index[\c j]\<\a key */
     inline Index searchLowerIndex(Index key) const
@@ -214,12 +227,17 @@ class CompressedStorage
 
     inline void reallocate(Index size)
     {
+      #ifdef EIGEN_SPARSE_COMPRESSED_STORAGE_REALLOCATE_PLUGIN
+        EIGEN_SPARSE_COMPRESSED_STORAGE_REALLOCATE_PLUGIN
+      #endif
       eigen_internal_assert(size!=m_allocatedSize);
       internal::scoped_array<Scalar> newValues(size);
       internal::scoped_array<StorageIndex> newIndices(size);
       Index copySize = (std::min)(size, m_size);
-      internal::smart_copy(m_values, m_values+copySize, newValues.ptr());
-      internal::smart_copy(m_indices, m_indices+copySize, newIndices.ptr());
+      if (copySize>0) {
+        internal::smart_copy(m_values, m_values+copySize, newValues.ptr());
+        internal::smart_copy(m_indices, m_indices+copySize, newIndices.ptr());
+      }
       std::swap(m_values,newValues.ptr());
       std::swap(m_indices,newIndices.ptr());
       m_allocatedSize = size;

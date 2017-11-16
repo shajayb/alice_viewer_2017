@@ -1,7 +1,14 @@
+// This file is part of libigl, a simple c++ geometry processing library.
+// 
+// Copyright (C) 2015 Alec Jacobson <alecjacobson@gmail.com>
+// 
+// This Source Code Form is subject to the terms of the Mozilla Public License 
+// v. 2.0. If a copy of the MPL was not distributed with this file, You can 
+// obtain one at http://mozilla.org/MPL/2.0/.
 #include "exterior_edges.h"
-#include "all_edges.h"
+#include "oriented_facets.h"
 #include "sort.h"
-#include "unique.h"
+#include "unique_rows.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -44,7 +51,7 @@ IGL_INLINE void igl::exterior_edges(
   const size_t m = F.rows();
   MatrixXi all_E,sall_E,sort_order;
   // Sort each edge by index
-  all_edges(F,all_E);
+  oriented_facets(F,all_E);
   sort(all_E,2,true,sall_E,sort_order);
   // Find unique edges
   MatrixXi uE;
@@ -79,7 +86,7 @@ IGL_INLINE void igl::exterior_edges(
       }
       // Append edge for every repeated entry
       const int abs_count = abs(count);
-      for(size_t k = 0;k<abs_count;k++)
+      for(int k = 0;k<abs_count;k++)
       {
         E(e,0) = i;
         E(e,1) = j;
