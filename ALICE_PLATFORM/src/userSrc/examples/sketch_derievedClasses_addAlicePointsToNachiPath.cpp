@@ -15,7 +15,7 @@
 // except generating a cylinder, 
 // we will make a custom class that inherits everything else from pathImporter
 // and we will only add the cylinder generation method;
-// This way of inherit and extending a class is called derieved classes in C++.
+// This way of inherit and extending a class is called derived classes in C++.
 // read about derived classes 
 
 
@@ -110,6 +110,7 @@ void draw()
 void keyPress(unsigned char k, int xm, int ym)
 {
 	// add a event call back of the method we have added.
+	// i.e add path
 	if (k == 'a')
 	{
 		path.addCylinder(5, 40 , vec (20,20,10));
