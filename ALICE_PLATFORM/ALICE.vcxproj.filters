@@ -49,6 +49,9 @@
     <ClCompile Include="src\userSrc\examples\sketch_nachi_convertToGcodeExample.cpp">
       <Filter>sketches</Filter>
     </ClCompile>
+    <ClCompile Include="src\userSrc\examples\sketch_derievedClasses_isoSurface.cpp">
+      <Filter>sketches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\alice\MODEL.h">

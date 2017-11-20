@@ -1,0 +1,7 @@
+﻿C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\VC\VCTargets\Microsoft.CppBuild.targets(387,5): warning MSB8028: The intermediate directory (x64/Release/) contains files shared from another project (ALICE_PLATFORM.vcxproj).  This can lead to incorrect clean and rebuild behavior.
+  cuda_sketch.cpp
+C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\VC\VCTargets\Microsoft.CppBuild.targets(1198,5): warning MSB8012: TargetPath(C:\Users\shajay.b\Source\Repos\alice_viewer_2017\ALICE_PLATFORM\x64\Release\ALICE_CUDA.exe) does not match the Linker's OutputFile property value (C:\Users\shajay.b\Source\Repos\alice_viewer_2017\ALICE_PLATFORM\x64\Release\EXE\ALICE_CUDA.exe). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
+     Creating library C:\Users\shajay.b\Source\Repos\alice_viewer_2017\ALICE_PLATFORM\x64\Release\ALICE_CUDA.lib and object C:\Users\shajay.b\Source\Repos\alice_viewer_2017\ALICE_PLATFORM\x64\Release\ALICE_CUDA.exp
+  Generating code
+  Finished generating code
+  ALICE_CUDA.vcxproj -> C:\Users\shajay.b\Source\Repos\alice_viewer_2017\ALICE_PLATFORM\x64\Release\ALICE_CUDA.exe

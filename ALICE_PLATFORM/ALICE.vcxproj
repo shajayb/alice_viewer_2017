@@ -67,6 +67,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="src\polyClipper\clipper.cpp" />
+    <ClCompile Include="src\userSrc\examples\sketch_derievedClasses_isoSurface.cpp" />
     <ClCompile Include="src\userSrc\examples\sketch_nachi_convertToGcodeExample.cpp" />
     <ClCompile Include="src\userSrc\sketch_empty\sketch_empty.cpp" />
   </ItemGroup>
@@ -271,7 +272,7 @@
     <Link>
       <AdditionalDependencies>glew32.lib;ALICE_DLL.lib;ALICE_RobotDll.lib;opengl32.lib;gl2ps.lib;libgizmo.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)EXE\$(ProjectName).exe</OutputFile>
-      <AdditionalLibraryDirectories>src/algLib/;src/libGizmo/lib;C:\Users\shajay.b\Downloads\libQGLViewer-2.6.3\libQGLViewer-2.6.3\QGLViewer\;C:\Qt\5.7\msvc2013_64\lib;x64/Release;src/gl2ps;src/;src/glew/lib;src/alice;src/freeglut;src\external\AntTweakBar\lib;src\external\glfw\lib\x64;src\external\glew\lib;src\external\embree\include\embree2;src\external\embree\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>src/algLib/;src/libGizmo/lib;x64/Release;src/gl2ps;src/;src/glew/lib;src/alice;src/freeglut;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
