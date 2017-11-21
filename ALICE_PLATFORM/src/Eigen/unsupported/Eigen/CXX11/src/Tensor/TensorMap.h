@@ -18,21 +18,17 @@ namespace Eigen {
   * \brief A tensor expression mapping an existing array of data.
   *
   */
-/// template <class> class MakePointer_ is added to convert the host pointer to the device pointer.
-/// It is added due to the fact that for our device compiler T* is not allowed.
-/// If we wanted to use the same Evaluator functions we have to convert that type to our pointer T.
-/// This is done through our MakePointer_ class. By default the Type in the MakePointer_<T> is T* .
-/// Therefore, by adding the default value, we managed to convert the type and it does not break any
-/// existing code as its default value is T*.
-template<typename PlainObjectType, int Options_, template <class> class MakePointer_> class TensorMap : public TensorBase<TensorMap<PlainObjectType, Options_, MakePointer_> >
+
+template<typename PlainObjectType, int Options_> class TensorMap : public TensorBase<TensorMap<PlainObjectType, Options_> >
 {
   public:
-    typedef TensorMap<PlainObjectType, Options_, MakePointer_> Self;
+    typedef TensorMap<PlainObjectType, Options_> Self;
     typedef typename PlainObjectType::Base Base;
     typedef typename Eigen::internal::nested<Self>::type Nested;
     typedef typename internal::traits<PlainObjectType>::StorageKind StorageKind;
     typedef typename internal::traits<PlainObjectType>::Index Index;
     typedef typename internal::traits<PlainObjectType>::Scalar Scalar;
+    typedef typename internal::packet_traits<Scalar>::type Packet;
     typedef typename NumTraits<Scalar>::Real RealScalar;
     typedef typename Base::CoeffReturnType CoeffReturnType;
 
@@ -41,7 +37,7 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
                          Scalar *,
                          const Scalar *>::type
                      PointerType;*/
-    typedef typename MakePointer_<Scalar>::Type PointerType;
+    typedef Scalar* PointerType;
     typedef PointerType PointerArgType;
 
     static const int Options = Options_;
@@ -51,18 +47,12 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
 
     enum {
       IsAligned = ((int(Options_)&Aligned)==Aligned),
+      PacketAccess = (internal::packet_traits<Scalar>::size > 1),
       Layout = PlainObjectType::Layout,
       CoordAccess = true,
-      RawAccess = true
     };
 
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE TensorMap(PointerArgType dataPtr) : m_data(dataPtr), m_dimensions() {
-      // The number of dimensions used to construct a tensor must be equal to the rank of the tensor.
-      EIGEN_STATIC_ASSERT((0 == NumIndices || NumIndices == Dynamic), YOU_MADE_A_PROGRAMMING_MISTAKE)
-    }
-
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes> EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE TensorMap(PointerArgType dataPtr, Index firstDimension, IndexTypes... otherDimensions) : m_data(dataPtr), m_dimensions(firstDimension, otherDimensions...) {
       // The number of dimensions used to construct a tensor must be equal to the rank of the tensor.
@@ -92,17 +82,13 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
     }
 #endif
 
-   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorMap(PointerArgType dataPtr, const array<Index, NumIndices>& dimensions)
+   inline TensorMap(PointerArgType dataPtr, const array<Index, NumIndices>& dimensions)
       : m_data(dataPtr), m_dimensions(dimensions)
     { }
 
     template <typename Dimensions>
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorMap(PointerArgType dataPtr, const Dimensions& dimensions)
+    EIGEN_STRONG_INLINE TensorMap(PointerArgType dataPtr, const Dimensions& dimensions)
       : m_data(dataPtr), m_dimensions(dimensions)
-    { }
-
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorMap(PlainObjectType& tensor)
-      : m_data(tensor.data()), m_dimensions(tensor.dimensions())
     { }
 
     EIGEN_DEVICE_FUNC
@@ -114,9 +100,9 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE Index size() const { return m_dimensions.TotalSize(); }
     EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE PointerType data() { return m_data; }
+    EIGEN_STRONG_INLINE Scalar* data() { return m_data; }
     EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const PointerType data() const { return m_data; }
+    EIGEN_STRONG_INLINE const Scalar* data() const { return m_data; }
 
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar& operator()(const array<Index, NumIndices>& indices) const
@@ -131,39 +117,31 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
       }
     }
 
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()() const
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
+    template<typename... IndexTypes> EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE const Scalar& operator()(Index firstIndex, IndexTypes... otherIndices) const
     {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE)
-      return m_data[0];
+      static_assert(sizeof...(otherIndices) + 1 == NumIndices, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
+      if (PlainObjectType::Options&RowMajor) {
+        const Index index = m_dimensions.IndexOfRowMajor(array<Index, NumIndices>{{firstIndex, otherIndices...}});
+        return m_data[index];
+      } else {
+        const Index index = m_dimensions.IndexOfColMajor(array<Index, NumIndices>{{firstIndex, otherIndices...}});
+        return m_data[index];
+      }
     }
-
+#else
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar& operator()(Index index) const
     {
       eigen_internal_assert(index >= 0 && index < size());
       return m_data[index];
     }
-
-#if EIGEN_HAS_VARIADIC_TEMPLATES
-    template<typename... IndexTypes> EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()(Index firstIndex, Index secondIndex, IndexTypes... otherIndices) const
-    {
-      EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 2 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
-      if (PlainObjectType::Options&RowMajor) {
-        const Index index = m_dimensions.IndexOfRowMajor(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
-        return m_data[index];
-      } else {
-        const Index index = m_dimensions.IndexOfColMajor(array<Index, NumIndices>{{firstIndex, secondIndex, otherIndices...}});
-        return m_data[index];
-      }
-    }
-#else
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1) const
     {
       if (PlainObjectType::Options&RowMajor) {
-        const Index index = i1 + i0 * m_dimensions[1];
+        const Index index = i1 + i0 * m_dimensions[0];
         return m_data[index];
       } else {
         const Index index = i0 + i1 * m_dimensions[0];
@@ -174,7 +152,7 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
     EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1, Index i2) const
     {
       if (PlainObjectType::Options&RowMajor) {
-         const Index index = i2 + m_dimensions[2] * (i1 + m_dimensions[1] * i0);
+         const Index index = i2 + m_dimensions[1] * (i1 + m_dimensions[0] * i0);
          return m_data[index];
       } else {
          const Index index = i0 + m_dimensions[0] * (i1 + m_dimensions[1] * i2);
@@ -218,40 +196,32 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
       }
     }
 
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()()
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
+    template<typename... IndexTypes> EIGEN_DEVICE_FUNC
+    EIGEN_STRONG_INLINE Scalar& operator()(Index firstIndex, IndexTypes... otherIndices)
     {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE)
-      return m_data[0];
+      static_assert(sizeof...(otherIndices) + 1 == NumIndices || NumIndices == Dynamic, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
+      const std::size_t NumDims = sizeof...(otherIndices) + 1;
+      if (PlainObjectType::Options&RowMajor) {
+        const Index index = m_dimensions.IndexOfRowMajor(array<Index, NumDims>{{firstIndex, otherIndices...}});
+        return m_data[index];
+      } else {
+        const Index index = m_dimensions.IndexOfColMajor(array<Index, NumDims>{{firstIndex, otherIndices...}});
+        return m_data[index];
+      }
     }
-
+#else
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE Scalar& operator()(Index index)
     {
       eigen_internal_assert(index >= 0 && index < size());
       return m_data[index];
     }
-
-#if EIGEN_HAS_VARIADIC_TEMPLATES
-    template<typename... IndexTypes> EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()(Index firstIndex, Index secondIndex, IndexTypes... otherIndices)
-    {
-      static_assert(sizeof...(otherIndices) + 2 == NumIndices || NumIndices == Dynamic, "Number of indices used to access a tensor coefficient must be equal to the rank of the tensor.");
-      const std::size_t NumDims = sizeof...(otherIndices) + 2;
-      if (PlainObjectType::Options&RowMajor) {
-        const Index index = m_dimensions.IndexOfRowMajor(array<Index, NumDims>{{firstIndex, secondIndex, otherIndices...}});
-        return m_data[index];
-      } else {
-        const Index index = m_dimensions.IndexOfColMajor(array<Index, NumDims>{{firstIndex, secondIndex, otherIndices...}});
-        return m_data[index];
-      }
-    }
-#else
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1)
     {
        if (PlainObjectType::Options&RowMajor) {
-         const Index index = i1 + i0 * m_dimensions[1];
+         const Index index = i1 + i0 * m_dimensions[0];
         return m_data[index];
       } else {
         const Index index = i0 + i1 * m_dimensions[0];
@@ -262,7 +232,7 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
     EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1, Index i2)
     {
        if (PlainObjectType::Options&RowMajor) {
-         const Index index = i2 + m_dimensions[2] * (i1 + m_dimensions[1] * i0);
+         const Index index = i2 + m_dimensions[1] * (i1 + m_dimensions[0] * i0);
         return m_data[index];
       } else {
          const Index index = i0 + m_dimensions[0] * (i1 + m_dimensions[1] * i2);
@@ -312,7 +282,7 @@ template<typename PlainObjectType, int Options_, template <class> class MakePoin
     }
 
   private:
-    typename MakePointer_<Scalar>::Type m_data;
+    Scalar* m_data;
     Dimensions m_dimensions;
 };
 

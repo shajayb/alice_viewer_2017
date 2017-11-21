@@ -27,33 +27,18 @@ struct traits<SparseView<MatrixType> > : traits<MatrixType>
 
 } // end namespace internal
 
-/** \ingroup SparseCore_Module
-  * \class SparseView
-  *
-  * \brief Expression of a dense or sparse matrix with zero or too small values removed
-  *
-  * \tparam MatrixType the type of the object of which we are removing the small entries
-  *
-  * This class represents an expression of a given dense or sparse matrix with
-  * entries smaller than \c reference * \c epsilon are removed.
-  * It is the return type of MatrixBase::sparseView() and SparseMatrixBase::pruned()
-  * and most of the time this is the only way it is used.
-  *
-  * \sa MatrixBase::sparseView(), SparseMatrixBase::pruned()
-  */
 template<typename MatrixType>
 class SparseView : public SparseMatrixBase<SparseView<MatrixType> >
 {
   typedef typename MatrixType::Nested MatrixTypeNested;
   typedef typename internal::remove_all<MatrixTypeNested>::type _MatrixTypeNested;
-  typedef SparseMatrixBase<SparseView > Base;
 public:
   EIGEN_SPARSE_PUBLIC_INTERFACE(SparseView)
   typedef typename internal::remove_all<MatrixType>::type NestedExpression;
 
-  explicit SparseView(const MatrixType& mat, const Scalar& reference = Scalar(0),
-                      const RealScalar &epsilon = NumTraits<Scalar>::dummy_precision())
-    : m_matrix(mat), m_reference(reference), m_epsilon(epsilon) {}
+  explicit SparseView(const MatrixType& mat, const Scalar& m_reference = Scalar(0),
+             RealScalar m_epsilon = NumTraits<Scalar>::dummy_precision()) : 
+    m_matrix(mat), m_reference(m_reference), m_epsilon(m_epsilon) {}
 
   inline Index rows() const { return m_matrix.rows(); }
   inline Index cols() const { return m_matrix.cols(); }
@@ -129,7 +114,7 @@ struct unary_evaluator<SparseView<ArgType>, IteratorBased>
     explicit unary_evaluator(const XprType& xpr) : m_argImpl(xpr.nestedExpression()), m_view(xpr) {}
 
   protected:
-    evaluator<ArgType> m_argImpl;
+    typename evaluator<ArgType>::nestedType m_argImpl;
     const XprType &m_view;
 };
 
@@ -142,7 +127,6 @@ struct unary_evaluator<SparseView<ArgType>, IndexBased>
   protected:
     enum { IsRowMajor = (XprType::Flags&RowMajorBit)==RowMajorBit };
     typedef typename XprType::Scalar Scalar;
-    typedef typename XprType::StorageIndex StorageIndex;
   public:
     
     class InnerIterator
@@ -168,7 +152,7 @@ struct unary_evaluator<SparseView<ArgType>, IndexBased>
                               : m_sve.m_argImpl.coeff(m_inner, m_outer);
         }
 
-        EIGEN_STRONG_INLINE StorageIndex index() const { return m_inner; }
+        EIGEN_STRONG_INLINE Index index() const { return m_inner; }
         inline Index row() const { return IsRowMajor ? m_outer : index(); }
         inline Index col() const { return IsRowMajor ? index() : m_outer; }
 
@@ -198,29 +182,12 @@ struct unary_evaluator<SparseView<ArgType>, IndexBased>
     explicit unary_evaluator(const XprType& xpr) : m_argImpl(xpr.nestedExpression()), m_view(xpr) {}
 
   protected:
-    evaluator<ArgType> m_argImpl;
+    typename evaluator<ArgType>::nestedType m_argImpl;
     const XprType &m_view;
 };
 
 } // end namespace internal
 
-/** \ingroup SparseCore_Module
-  *
-  * \returns a sparse expression of the dense expression \c *this with values smaller than
-  * \a reference * \a epsilon removed.
-  *
-  * This method is typically used when prototyping to convert a quickly assembled dense Matrix \c D to a SparseMatrix \c S:
-  * \code
-  * MatrixXd D(n,m);
-  * SparseMatrix<double> S;
-  * S = D.sparseView();             // suppress numerical zeros (exact)
-  * S = D.sparseView(reference);
-  * S = D.sparseView(reference,epsilon);
-  * \endcode
-  * where \a reference is a meaningful non zero reference value,
-  * and \a epsilon is a tolerance factor defaulting to NumTraits<Scalar>::dummy_precision().
-  *
-  * \sa SparseMatrixBase::pruned(), class SparseView */
 template<typename Derived>
 const SparseView<Derived> MatrixBase<Derived>::sparseView(const Scalar& reference,
                                                           const typename NumTraits<Scalar>::Real& epsilon) const
@@ -229,7 +196,7 @@ const SparseView<Derived> MatrixBase<Derived>::sparseView(const Scalar& referenc
 }
 
 /** \returns an expression of \c *this with values smaller than
-  * \a reference * \a epsilon removed.
+  * \a reference * \a epsilon are removed.
   *
   * This method is typically used in conjunction with the product of two sparse matrices
   * to automatically prune the smallest values as follows:

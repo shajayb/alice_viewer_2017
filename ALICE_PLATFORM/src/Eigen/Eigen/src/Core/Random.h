@@ -16,7 +16,8 @@ namespace internal {
 
 template<typename Scalar> struct scalar_random_op {
   EIGEN_EMPTY_STRUCT_CTOR(scalar_random_op)
-  inline const Scalar operator() () const { return random<Scalar>(); }
+  template<typename Index>
+  inline const Scalar operator() (Index, Index = 0) const { return random<Scalar>(); }
 };
 
 template<typename Scalar>
@@ -52,7 +53,7 @@ struct functor_traits<scalar_random_op<Scalar> >
   * \sa DenseBase::setRandom(), DenseBase::Random(Index), DenseBase::Random()
   */
 template<typename Derived>
-inline const typename DenseBase<Derived>::RandomReturnType
+inline const CwiseNullaryOp<internal::scalar_random_op<typename internal::traits<Derived>::Scalar>, Derived>
 DenseBase<Derived>::Random(Index rows, Index cols)
 {
   return NullaryExpr(rows, cols, internal::scalar_random_op<Scalar>());
@@ -83,7 +84,7 @@ DenseBase<Derived>::Random(Index rows, Index cols)
   * \sa DenseBase::setRandom(), DenseBase::Random(Index,Index), DenseBase::Random()
   */
 template<typename Derived>
-inline const typename DenseBase<Derived>::RandomReturnType
+inline const CwiseNullaryOp<internal::scalar_random_op<typename internal::traits<Derived>::Scalar>, Derived>
 DenseBase<Derived>::Random(Index size)
 {
   return NullaryExpr(size, internal::scalar_random_op<Scalar>());
@@ -109,7 +110,7 @@ DenseBase<Derived>::Random(Index size)
   * \sa DenseBase::setRandom(), DenseBase::Random(Index,Index), DenseBase::Random(Index)
   */
 template<typename Derived>
-inline const typename DenseBase<Derived>::RandomReturnType
+inline const CwiseNullaryOp<internal::scalar_random_op<typename internal::traits<Derived>::Scalar>, Derived>
 DenseBase<Derived>::Random()
 {
   return NullaryExpr(RowsAtCompileTime, ColsAtCompileTime, internal::scalar_random_op<Scalar>());
@@ -161,8 +162,8 @@ PlainObjectBase<Derived>::setRandom(Index newSize)
   *
   * \not_reentrant
   * 
-  * \param rows the new number of rows
-  * \param cols the new number of columns
+  * \param nbRows the new number of rows
+  * \param nbCols the new number of columns
   *
   * Example: \include Matrix_setRandom_int_int.cpp
   * Output: \verbinclude Matrix_setRandom_int_int.out
@@ -171,9 +172,9 @@ PlainObjectBase<Derived>::setRandom(Index newSize)
   */
 template<typename Derived>
 EIGEN_STRONG_INLINE Derived&
-PlainObjectBase<Derived>::setRandom(Index rows, Index cols)
+PlainObjectBase<Derived>::setRandom(Index nbRows, Index nbCols)
 {
-  resize(rows, cols);
+  resize(nbRows, nbCols);
   return setRandom();
 }
 

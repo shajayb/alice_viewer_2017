@@ -67,8 +67,6 @@ Index QuickSplit(VectorV &row, VectorI &ind, Index ncut)
   * \class IncompleteLUT
   * \brief Incomplete LU factorization with dual-threshold strategy
   *
-  * \implsparsesolverconcept
-  *
   * During the numerical factorization, two dropping rules are used :
   *  1) any element whose magnitude is less than some tolerance is dropped.
   *    This tolerance is obtained by multiplying the input tolerance @p droptol 
@@ -95,26 +93,22 @@ Index QuickSplit(VectorV &row, VectorI &ind, Index ncut)
   * alternatively, on GMANE:
   *   http://comments.gmane.org/gmane.comp.lib.eigen/3302
   */
-template <typename _Scalar, typename _StorageIndex = int>
-class IncompleteLUT : public SparseSolverBase<IncompleteLUT<_Scalar, _StorageIndex> >
+template <typename _Scalar>
+class IncompleteLUT : public SparseSolverBase<IncompleteLUT<_Scalar> >
 {
   protected:
-    typedef SparseSolverBase<IncompleteLUT> Base;
+    typedef SparseSolverBase<IncompleteLUT<_Scalar> > Base;
     using Base::m_isInitialized;
   public:
     typedef _Scalar Scalar;
-    typedef _StorageIndex StorageIndex;
     typedef typename NumTraits<Scalar>::Real RealScalar;
     typedef Matrix<Scalar,Dynamic,1> Vector;
-    typedef Matrix<StorageIndex,Dynamic,1> VectorI;
-    typedef SparseMatrix<Scalar,RowMajor,StorageIndex> FactorType;
-
-    enum {
-      ColsAtCompileTime = Dynamic,
-      MaxColsAtCompileTime = Dynamic
-    };
+    typedef SparseMatrix<Scalar,RowMajor> FactorType;
+    typedef SparseMatrix<Scalar,ColMajor> PermutType;
+    typedef typename FactorType::StorageIndex StorageIndex;
 
   public:
+    typedef Matrix<Scalar,Dynamic,Dynamic> MatrixType;
     
     IncompleteLUT()
       : m_droptol(NumTraits<Scalar>::dummy_precision()), m_fillfactor(10),
@@ -157,10 +151,11 @@ class IncompleteLUT : public SparseSolverBase<IncompleteLUT<_Scalar, _StorageInd
       * 
       **/
     template<typename MatrixType>
-    IncompleteLUT& compute(const MatrixType& amat)
+    IncompleteLUT<Scalar>& compute(const MatrixType& amat)
     {
       analyzePattern(amat); 
       factorize(amat);
+      m_isInitialized = m_factorizationIsOk;
       return *this;
     }
 
@@ -170,7 +165,7 @@ class IncompleteLUT : public SparseSolverBase<IncompleteLUT<_Scalar, _StorageInd
     template<typename Rhs, typename Dest>
     void _solve_impl(const Rhs& b, Dest& x) const
     {
-      x = m_Pinv * b;
+      x = m_Pinv * b;  
       x = m_lu.template triangularView<UnitLower>().solve(x);
       x = m_lu.template triangularView<Upper>().solve(x);
       x = m_P * x; 
@@ -202,8 +197,8 @@ protected:
  * Set control parameter droptol
  *  \param droptol   Drop any element whose magnitude is less than this tolerance 
  **/ 
-template<typename Scalar, typename StorageIndex>
-void IncompleteLUT<Scalar,StorageIndex>::setDroptol(const RealScalar& droptol)
+template<typename Scalar>
+void IncompleteLUT<Scalar>::setDroptol(const RealScalar& droptol)
 {
   this->m_droptol = droptol;   
 }
@@ -212,45 +207,34 @@ void IncompleteLUT<Scalar,StorageIndex>::setDroptol(const RealScalar& droptol)
  * Set control parameter fillfactor
  * \param fillfactor  This is used to compute the  number @p fill_in of largest elements to keep on each row. 
  **/ 
-template<typename Scalar, typename StorageIndex>
-void IncompleteLUT<Scalar,StorageIndex>::setFillfactor(int fillfactor)
+template<typename Scalar>
+void IncompleteLUT<Scalar>::setFillfactor(int fillfactor)
 {
   this->m_fillfactor = fillfactor;   
 }
 
-template <typename Scalar, typename StorageIndex>
+template <typename Scalar>
 template<typename _MatrixType>
-void IncompleteLUT<Scalar,StorageIndex>::analyzePattern(const _MatrixType& amat)
+void IncompleteLUT<Scalar>::analyzePattern(const _MatrixType& amat)
 {
   // Compute the Fill-reducing permutation
-  // Since ILUT does not perform any numerical pivoting,
-  // it is highly preferable to keep the diagonal through symmetric permutations.
-#ifndef EIGEN_MPL2_ONLY
-  // To this end, let's symmetrize the pattern and perform AMD on it.
   SparseMatrix<Scalar,ColMajor, StorageIndex> mat1 = amat;
   SparseMatrix<Scalar,ColMajor, StorageIndex> mat2 = amat.transpose();
+  // Symmetrize the pattern
   // FIXME for a matrix with nearly symmetric pattern, mat2+mat1 is the appropriate choice.
   //       on the other hand for a really non-symmetric pattern, mat2*mat1 should be prefered...
   SparseMatrix<Scalar,ColMajor, StorageIndex> AtA = mat2 + mat1;
-  AMDOrdering<StorageIndex> ordering;
-  ordering(AtA,m_P);
-  m_Pinv  = m_P.inverse(); // cache the inverse permutation
-#else
-  // If AMD is not available, (MPL2-only), then let's use the slower COLAMD routine.
-  SparseMatrix<Scalar,ColMajor, StorageIndex> mat1 = amat;
-  COLAMDOrdering<StorageIndex> ordering;
-  ordering(mat1,m_Pinv);
-  m_P = m_Pinv.inverse();
-#endif
+  AtA.prune(keep_diag());
+  internal::minimum_degree_ordering<Scalar, StorageIndex>(AtA, m_P);  // Then compute the AMD ordering...
+
+  m_Pinv  = m_P.inverse(); // ... and the inverse permutation
 
   m_analysisIsOk = true;
-  m_factorizationIsOk = false;
-  m_isInitialized = true;
 }
 
-template <typename Scalar, typename StorageIndex>
+template <typename Scalar>
 template<typename _MatrixType>
-void IncompleteLUT<Scalar,StorageIndex>::factorize(const _MatrixType& amat)
+void IncompleteLUT<Scalar>::factorize(const _MatrixType& amat)
 {
   using std::sqrt;
   using std::swap;
@@ -262,8 +246,8 @@ void IncompleteLUT<Scalar,StorageIndex>::factorize(const _MatrixType& amat)
   m_lu.resize(n,n);
   // Declare Working vectors and variables
   Vector u(n) ;     // real values of the row -- maximum size is n --
-  VectorI ju(n);   // column position of the values in u -- maximum size  is n
-  VectorI jr(n);   // Indicate the position of the nonzero elements in the vector u -- A zero location is indicated by -1
+  VectorXi ju(n);   // column position of the values in u -- maximum size  is n
+  VectorXi jr(n);   // Indicate the position of the nonzero elements in the vector u -- A zero location is indicated by -1
 
   // Apply the fill-reducing permutation
   eigen_assert(m_analysisIsOk && "You must first call analyzePattern()");
@@ -414,7 +398,7 @@ void IncompleteLUT<Scalar,StorageIndex>::factorize(const _MatrixType& amat)
     sizel = len;
     len = (std::min)(sizel, nnzL);
     typename Vector::SegmentReturnType ul(u.segment(0, sizel));
-    typename VectorI::SegmentReturnType jul(ju.segment(0, sizel));
+    typename VectorXi::SegmentReturnType jul(ju.segment(0, sizel));
     internal::QuickSplit(ul, jul, len);
 
     // store the largest m_fill elements of the L part
@@ -443,13 +427,14 @@ void IncompleteLUT<Scalar,StorageIndex>::factorize(const _MatrixType& amat)
     sizeu = len + 1; // +1 to take into account the diagonal element
     len = (std::min)(sizeu, nnzU);
     typename Vector::SegmentReturnType uu(u.segment(ii+1, sizeu-1));
-    typename VectorI::SegmentReturnType juu(ju.segment(ii+1, sizeu-1));
+    typename VectorXi::SegmentReturnType juu(ju.segment(ii+1, sizeu-1));
     internal::QuickSplit(uu, juu, len);
 
     // store the largest elements of the U part
     for(Index k = ii + 1; k < ii + len; k++)
       m_lu.insertBackByOuterInnerUnordered(ii,ju(k)) = u(k);
   }
+
   m_lu.finalize();
   m_lu.makeCompressed();
 

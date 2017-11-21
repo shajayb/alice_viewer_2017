@@ -22,7 +22,6 @@ struct visitor_impl
     row = (UnrollCount-1) % Derived::RowsAtCompileTime
   };
 
-  EIGEN_DEVICE_FUNC
   static inline void run(const Derived &mat, Visitor& visitor)
   {
     visitor_impl<Visitor, Derived, UnrollCount-1>::run(mat, visitor);
@@ -33,7 +32,6 @@ struct visitor_impl
 template<typename Visitor, typename Derived>
 struct visitor_impl<Visitor, Derived, 1>
 {
-  EIGEN_DEVICE_FUNC
   static inline void run(const Derived &mat, Visitor& visitor)
   {
     return visitor.init(mat.coeff(0, 0), 0, 0);
@@ -43,7 +41,6 @@ struct visitor_impl<Visitor, Derived, 1>
 template<typename Visitor, typename Derived>
 struct visitor_impl<Visitor, Derived, Dynamic>
 {
-  EIGEN_DEVICE_FUNC
   static inline void run(const Derived& mat, Visitor& visitor)
   {
     visitor.init(mat.coeff(0,0), 0, 0);
@@ -60,7 +57,6 @@ template<typename XprType>
 class visitor_evaluator
 {
 public:
-  EIGEN_DEVICE_FUNC
   explicit visitor_evaluator(const XprType &xpr) : m_evaluator(xpr), m_xpr(xpr) {}
   
   typedef typename XprType::Scalar Scalar;
@@ -71,15 +67,15 @@ public:
     CoeffReadCost = internal::evaluator<XprType>::CoeffReadCost
   };
   
-  EIGEN_DEVICE_FUNC Index rows() const { return m_xpr.rows(); }
-  EIGEN_DEVICE_FUNC Index cols() const { return m_xpr.cols(); }
-  EIGEN_DEVICE_FUNC Index size() const { return m_xpr.size(); }
+  Index rows() const { return m_xpr.rows(); }
+  Index cols() const { return m_xpr.cols(); }
+  Index size() const { return m_xpr.size(); }
 
-  EIGEN_DEVICE_FUNC CoeffReturnType coeff(Index row, Index col) const
+  CoeffReturnType coeff(Index row, Index col) const
   { return m_evaluator.coeff(row, col); }
   
 protected:
-  internal::evaluator<XprType> m_evaluator;
+  typename internal::evaluator<XprType>::nestedType m_evaluator;
   const XprType &m_xpr;
 };
 } // end namespace internal
@@ -103,17 +99,19 @@ protected:
   */
 template<typename Derived>
 template<typename Visitor>
-EIGEN_DEVICE_FUNC
 void DenseBase<Derived>::visit(Visitor& visitor) const
 {
   typedef typename internal::visitor_evaluator<Derived> ThisEvaluator;
   ThisEvaluator thisEval(derived());
   
-  enum {
-    unroll =  SizeAtCompileTime != Dynamic
-           && SizeAtCompileTime * ThisEvaluator::CoeffReadCost + (SizeAtCompileTime-1) * internal::functor_traits<Visitor>::Cost <= EIGEN_UNROLLING_LIMIT
-  };
-  return internal::visitor_impl<Visitor, ThisEvaluator, unroll ? int(SizeAtCompileTime) : Dynamic>::run(thisEval, visitor);
+  enum { unroll =   SizeAtCompileTime != Dynamic
+                &&  ThisEvaluator::CoeffReadCost != Dynamic
+                &&  (SizeAtCompileTime == 1 || internal::functor_traits<Visitor>::Cost != Dynamic)
+                &&  SizeAtCompileTime * ThisEvaluator::CoeffReadCost + (SizeAtCompileTime-1) * internal::functor_traits<Visitor>::Cost
+                <= EIGEN_UNROLLING_LIMIT };
+  return internal::visitor_impl<Visitor, ThisEvaluator,
+      unroll ? int(SizeAtCompileTime) : Dynamic
+    >::run(thisEval, visitor);
 }
 
 namespace internal {
@@ -127,7 +125,6 @@ struct coeff_visitor
   typedef typename Derived::Scalar Scalar;
   Index row, col;
   Scalar res;
-  EIGEN_DEVICE_FUNC
   inline void init(const Scalar& value, Index i, Index j)
   {
     res = value;
@@ -145,7 +142,6 @@ template <typename Derived>
 struct min_coeff_visitor : coeff_visitor<Derived>
 {
   typedef typename Derived::Scalar Scalar;
-  EIGEN_DEVICE_FUNC
   void operator() (const Scalar& value, Index i, Index j)
   {
     if(value < this->res)
@@ -172,8 +168,7 @@ struct functor_traits<min_coeff_visitor<Scalar> > {
 template <typename Derived>
 struct max_coeff_visitor : coeff_visitor<Derived>
 {
-  typedef typename Derived::Scalar Scalar; 
-  EIGEN_DEVICE_FUNC
+  typedef typename Derived::Scalar Scalar;
   void operator() (const Scalar& value, Index i, Index j)
   {
     if(value > this->res)
@@ -194,15 +189,13 @@ struct functor_traits<max_coeff_visitor<Scalar> > {
 
 } // end namespace internal
 
-/** \fn DenseBase<Derived>::minCoeff(IndexType* rowId, IndexType* colId) const
-  * \returns the minimum of all coefficients of *this and puts in *row and *col its location.
+/** \returns the minimum of all coefficients of *this and puts in *row and *col its location.
   * \warning the result is undefined if \c *this contains NaN.
   *
-  * \sa DenseBase::minCoeff(Index*), DenseBase::maxCoeff(Index*,Index*), DenseBase::visit(), DenseBase::minCoeff()
+  * \sa DenseBase::minCoeff(Index*), DenseBase::maxCoeff(Index*,Index*), DenseBase::visitor(), DenseBase::minCoeff()
   */
 template<typename Derived>
 template<typename IndexType>
-EIGEN_DEVICE_FUNC
 typename internal::traits<Derived>::Scalar
 DenseBase<Derived>::minCoeff(IndexType* rowId, IndexType* colId) const
 {
@@ -216,11 +209,10 @@ DenseBase<Derived>::minCoeff(IndexType* rowId, IndexType* colId) const
 /** \returns the minimum of all coefficients of *this and puts in *index its location.
   * \warning the result is undefined if \c *this contains NaN. 
   *
-  * \sa DenseBase::minCoeff(IndexType*,IndexType*), DenseBase::maxCoeff(IndexType*,IndexType*), DenseBase::visit(), DenseBase::minCoeff()
+  * \sa DenseBase::minCoeff(IndexType*,IndexType*), DenseBase::maxCoeff(IndexType*,IndexType*), DenseBase::visitor(), DenseBase::minCoeff()
   */
 template<typename Derived>
 template<typename IndexType>
-EIGEN_DEVICE_FUNC
 typename internal::traits<Derived>::Scalar
 DenseBase<Derived>::minCoeff(IndexType* index) const
 {
@@ -231,15 +223,13 @@ DenseBase<Derived>::minCoeff(IndexType* index) const
   return minVisitor.res;
 }
 
-/** \fn DenseBase<Derived>::maxCoeff(IndexType* rowId, IndexType* colId) const
-  * \returns the maximum of all coefficients of *this and puts in *row and *col its location.
+/** \returns the maximum of all coefficients of *this and puts in *row and *col its location.
   * \warning the result is undefined if \c *this contains NaN. 
   *
-  * \sa DenseBase::minCoeff(IndexType*,IndexType*), DenseBase::visit(), DenseBase::maxCoeff()
+  * \sa DenseBase::minCoeff(IndexType*,IndexType*), DenseBase::visitor(), DenseBase::maxCoeff()
   */
 template<typename Derived>
 template<typename IndexType>
-EIGEN_DEVICE_FUNC
 typename internal::traits<Derived>::Scalar
 DenseBase<Derived>::maxCoeff(IndexType* rowPtr, IndexType* colPtr) const
 {
@@ -257,7 +247,6 @@ DenseBase<Derived>::maxCoeff(IndexType* rowPtr, IndexType* colPtr) const
   */
 template<typename Derived>
 template<typename IndexType>
-EIGEN_DEVICE_FUNC
 typename internal::traits<Derived>::Scalar
 DenseBase<Derived>::maxCoeff(IndexType* index) const
 {

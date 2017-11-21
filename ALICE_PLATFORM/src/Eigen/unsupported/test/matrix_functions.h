@@ -61,7 +61,7 @@ struct generateTestMatrix<MatrixType,1>
 };
 
 template <typename Derived, typename OtherDerived>
-typename Derived::RealScalar relerr(const MatrixBase<Derived>& A, const MatrixBase<OtherDerived>& B)
+double relerr(const MatrixBase<Derived>& A, const MatrixBase<OtherDerived>& B)
 {
   return std::sqrt((A - B).cwiseAbs2().sum() / (std::min)(A.cwiseAbs2().sum(), B.cwiseAbs2().sum()));
 }

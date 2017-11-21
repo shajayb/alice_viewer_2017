@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2008-2015 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2008-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -10,16 +10,16 @@
 #ifndef EIGEN_SUPERLUSUPPORT_H
 #define EIGEN_SUPERLUSUPPORT_H
 
-namespace Eigen {
+namespace Eigen { 
 
-#if defined(SUPERLU_MAJOR_VERSION) && (SUPERLU_MAJOR_VERSION >= 5)
 #define DECL_GSSVX(PREFIX,FLOATTYPE,KEYTYPE)		\
     extern "C" {                                                                                          \
+      typedef struct { FLOATTYPE for_lu; FLOATTYPE total_needed; int expansions; } PREFIX##mem_usage_t;   \
       extern void PREFIX##gssvx(superlu_options_t *, SuperMatrix *, int *, int *, int *,                  \
                                 char *, FLOATTYPE *, FLOATTYPE *, SuperMatrix *, SuperMatrix *,           \
                                 void *, int, SuperMatrix *, SuperMatrix *,                                \
                                 FLOATTYPE *, FLOATTYPE *, FLOATTYPE *, FLOATTYPE *,                       \
-                                GlobalLU_t *, mem_usage_t *, SuperLUStat_t *, int *);                     \
+                                PREFIX##mem_usage_t *, SuperLUStat_t *, int *);                           \
     }                                                                                                     \
     inline float SuperLU_gssvx(superlu_options_t *options, SuperMatrix *A,                                \
          int *perm_c, int *perm_r, int *etree, char *equed,                                               \
@@ -29,37 +29,12 @@ namespace Eigen {
          FLOATTYPE *recip_pivot_growth,                                                                   \
          FLOATTYPE *rcond, FLOATTYPE *ferr, FLOATTYPE *berr,                                              \
          SuperLUStat_t *stats, int *info, KEYTYPE) {                                                      \
-    mem_usage_t mem_usage;                                                                                \
-    GlobalLU_t gLU;                                                                                       \
-    PREFIX##gssvx(options, A, perm_c, perm_r, etree, equed, R, C, L,                                      \
-         U, work, lwork, B, X, recip_pivot_growth, rcond,                                                 \
-         ferr, berr, &gLU, &mem_usage, stats, info);                                                      \
-    return mem_usage.for_lu; /* bytes used by the factor storage */                                       \
-  }
-#else // version < 5.0
-#define DECL_GSSVX(PREFIX,FLOATTYPE,KEYTYPE)		\
-    extern "C" {                                                                                          \
-      extern void PREFIX##gssvx(superlu_options_t *, SuperMatrix *, int *, int *, int *,                  \
-                                char *, FLOATTYPE *, FLOATTYPE *, SuperMatrix *, SuperMatrix *,           \
-                                void *, int, SuperMatrix *, SuperMatrix *,                                \
-                                FLOATTYPE *, FLOATTYPE *, FLOATTYPE *, FLOATTYPE *,                       \
-                                mem_usage_t *, SuperLUStat_t *, int *);                                   \
-    }                                                                                                     \
-    inline float SuperLU_gssvx(superlu_options_t *options, SuperMatrix *A,                                \
-         int *perm_c, int *perm_r, int *etree, char *equed,                                               \
-         FLOATTYPE *R, FLOATTYPE *C, SuperMatrix *L,                                                      \
-         SuperMatrix *U, void *work, int lwork,                                                           \
-         SuperMatrix *B, SuperMatrix *X,                                                                  \
-         FLOATTYPE *recip_pivot_growth,                                                                   \
-         FLOATTYPE *rcond, FLOATTYPE *ferr, FLOATTYPE *berr,                                              \
-         SuperLUStat_t *stats, int *info, KEYTYPE) {                                                      \
-    mem_usage_t mem_usage;                                                                                \
+    PREFIX##mem_usage_t mem_usage;                                                                        \
     PREFIX##gssvx(options, A, perm_c, perm_r, etree, equed, R, C, L,                                      \
          U, work, lwork, B, X, recip_pivot_growth, rcond,                                                 \
          ferr, berr, &mem_usage, stats, info);                                                            \
     return mem_usage.for_lu; /* bytes used by the factor storage */                                       \
   }
-#endif
 
 DECL_GSSVX(s,float,float)
 DECL_GSSVX(c,float,std::complex<float>)
@@ -78,7 +53,7 @@ DECL_GSSVX(z,double,std::complex<double>)
       extern void PREFIX##gsisx(superlu_options_t *, SuperMatrix *, int *, int *, int *,        \
                          char *, FLOATTYPE *, FLOATTYPE *, SuperMatrix *, SuperMatrix *,        \
                          void *, int, SuperMatrix *, SuperMatrix *, FLOATTYPE *, FLOATTYPE *,   \
-                         mem_usage_t *, SuperLUStat_t *, int *);                        \
+                         PREFIX##mem_usage_t *, SuperLUStat_t *, int *);                        \
     }                                                                                           \
     inline float SuperLU_gsisx(superlu_options_t *options, SuperMatrix *A,                      \
          int *perm_c, int *perm_r, int *etree, char *equed,                                     \
@@ -88,7 +63,7 @@ DECL_GSSVX(z,double,std::complex<double>)
          FLOATTYPE *recip_pivot_growth,                                                         \
          FLOATTYPE *rcond,                                                                      \
          SuperLUStat_t *stats, int *info, KEYTYPE) {                                            \
-    mem_usage_t mem_usage;                                                              \
+    PREFIX##mem_usage_t mem_usage;                                                              \
     PREFIX##gsisx(options, A, perm_c, perm_r, etree, equed, R, C, L,                            \
          U, work, lwork, B, X, recip_pivot_growth, rcond,                                       \
          &mem_usage, stats, info);                                                              \
@@ -190,9 +165,8 @@ struct SluMatrix : SuperMatrix
   }
 
   template<typename MatrixType>
-  static SluMatrix Map(SparseMatrixBase<MatrixType>& a_mat)
+  static SluMatrix Map(SparseMatrixBase<MatrixType>& mat)
   {
-    MatrixType &mat(a_mat.derived());
     SluMatrix res;
     if ((MatrixType::Flags&RowMajorBit)==RowMajorBit)
     {
@@ -210,9 +184,9 @@ struct SluMatrix : SuperMatrix
     res.Mtype       = SLU_GE;
 
     res.storage.nnz       = internal::convert_index<int>(mat.nonZeros());
-    res.storage.values    = mat.valuePtr();
-    res.storage.innerInd  = mat.innerIndexPtr();
-    res.storage.outerInd  = mat.outerIndexPtr();
+    res.storage.values    = mat.derived().valuePtr();
+    res.storage.innerInd  = mat.derived().innerIndexPtr();
+    res.storage.outerInd  = mat.derived().outerIndexPtr();
 
     res.setScalarType<typename MatrixType::Scalar>();
 
@@ -328,12 +302,7 @@ class SuperLUBase : public SparseSolverBase<Derived>
     typedef Matrix<Scalar,Dynamic,1> Vector;
     typedef Matrix<int, 1, MatrixType::ColsAtCompileTime> IntRowVectorType;
     typedef Matrix<int, MatrixType::RowsAtCompileTime, 1> IntColVectorType;    
-    typedef Map<PermutationMatrix<Dynamic,Dynamic,int> > PermutationMap;
     typedef SparseMatrix<Scalar> LUMatrixType;
-    enum {
-      ColsAtCompileTime = MatrixType::ColsAtCompileTime,
-      MaxColsAtCompileTime = MatrixType::MaxColsAtCompileTime
-    };
 
   public:
 
@@ -478,11 +447,7 @@ class SuperLUBase : public SparseSolverBase<Derived>
   *
   * \tparam _MatrixType the type of the sparse matrix A, it must be a SparseMatrix<>
   *
-  * \warning This class is only for the 4.x versions of SuperLU. The 3.x and 5.x versions are not supported.
-  *
-  * \implsparsesolverconcept
-  *
-  * \sa \ref TutorialSparseSolverConcept, class SparseLU
+  * \sa \ref TutorialSparseDirectSolvers
   */
 template<typename _MatrixType>
 class SuperLU : public SuperLUBase<_MatrixType,SuperLU<_MatrixType> >
@@ -494,11 +459,10 @@ class SuperLU : public SuperLUBase<_MatrixType,SuperLU<_MatrixType> >
     typedef typename Base::RealScalar RealScalar;
     typedef typename Base::StorageIndex StorageIndex;
     typedef typename Base::IntRowVectorType IntRowVectorType;
-    typedef typename Base::IntColVectorType IntColVectorType;   
-    typedef typename Base::PermutationMap PermutationMap;
+    typedef typename Base::IntColVectorType IntColVectorType;    
     typedef typename Base::LUMatrixType LUMatrixType;
     typedef TriangularView<LUMatrixType, Lower|UnitDiag>  LMatrixType;
-    typedef TriangularView<LUMatrixType,  Upper>          UMatrixType;
+    typedef TriangularView<LUMatrixType,  Upper>           UMatrixType;
 
   public:
     using Base::_solve_impl;
@@ -536,9 +500,11 @@ class SuperLU : public SuperLUBase<_MatrixType,SuperLU<_MatrixType> >
       */
     void factorize(const MatrixType& matrix);
     
+    #ifndef EIGEN_PARSED_BY_DOXYGEN
     /** \internal */
     template<typename Rhs,typename Dest>
     void _solve_impl(const MatrixBase<Rhs> &b, MatrixBase<Dest> &dest) const;
+    #endif // EIGEN_PARSED_BY_DOXYGEN
     
     inline const LMatrixType& matrixL() const
     {
@@ -690,7 +656,7 @@ void SuperLU<MatrixType>::_solve_impl(const MatrixBase<Rhs> &b, MatrixBase<Dest>
                 &m_sluStat, &info, Scalar());
   StatFree(&m_sluStat);
   
-  if(x.derived().data() != x_ref.data())
+  if(&x.coeffRef(0) != x_ref.data())
     x = x_ref;
   
   m_info = info==0 ? Success : NumericalIssue;
@@ -808,8 +774,6 @@ typename SuperLU<MatrixType>::Scalar SuperLU<MatrixType>::determinant() const
         det *= m_u.valuePtr()[lastId];
     }
   }
-  if(PermutationMap(m_p.data(),m_p.size()).determinant()*PermutationMap(m_q.data(),m_q.size()).determinant()<0)
-    det = -det;
   if(m_sluEqued!='N')
     return det/m_sluRscale.prod()/m_sluCscale.prod();
   else
@@ -829,13 +793,11 @@ typename SuperLU<MatrixType>::Scalar SuperLU<MatrixType>::determinant() const
   * This class allows to solve for an approximate solution of A.X = B sparse linear problems via an incomplete LU factorization
   * using the SuperLU library. This class is aimed to be used as a preconditioner of the iterative linear solvers.
   *
-  * \warning This class is only for the 4.x versions of SuperLU. The 3.x and 5.x versions are not supported.
+  * \warning This class requires SuperLU 4 or later.
   *
   * \tparam _MatrixType the type of the sparse matrix A, it must be a SparseMatrix<>
   *
-  * \implsparsesolverconcept
-  *
-  * \sa \ref TutorialSparseSolverConcept, class IncompleteLUT, class ConjugateGradient, class BiCGSTAB
+  * \sa \ref TutorialSparseDirectSolvers, class ConjugateGradient, class BiCGSTAB
   */
 
 template<typename _MatrixType>
@@ -967,7 +929,6 @@ void SuperILU<MatrixType>::factorize(const MatrixType& a)
   m_factorizationIsOk = true;
 }
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
 template<typename MatrixType>
 template<typename Rhs,typename Dest>
 void SuperILU<MatrixType>::_solve_impl(const MatrixBase<Rhs> &b, MatrixBase<Dest>& x) const
@@ -1013,13 +974,11 @@ void SuperILU<MatrixType>::_solve_impl(const MatrixBase<Rhs> &b, MatrixBase<Dest
                 &m_sluStat, &info, Scalar());
   StatFree(&m_sluStat);
   
-  if(x.derived().data() != x_ref.data())
+  if(&x.coeffRef(0) != x_ref.data())
     x = x_ref;
 
   m_info = info==0 ? Success : NumericalIssue;
 }
-#endif
-
 #endif
 
 } // end namespace Eigen

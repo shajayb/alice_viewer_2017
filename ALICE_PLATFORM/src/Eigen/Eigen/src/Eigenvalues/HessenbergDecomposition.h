@@ -115,9 +115,8 @@ template<typename _MatrixType> class HessenbergDecomposition
       *
       * \sa matrixH() for an example.
       */
-    template<typename InputType>
-    explicit HessenbergDecomposition(const EigenBase<InputType>& matrix)
-      : m_matrix(matrix.derived()),
+    explicit HessenbergDecomposition(const MatrixType& matrix)
+      : m_matrix(matrix),
         m_temp(matrix.rows()),
         m_isInitialized(false)
     {
@@ -148,10 +147,9 @@ template<typename _MatrixType> class HessenbergDecomposition
       * Example: \include HessenbergDecomposition_compute.cpp
       * Output: \verbinclude HessenbergDecomposition_compute.out
       */
-    template<typename InputType>
-    HessenbergDecomposition& compute(const EigenBase<InputType>& matrix)
+    HessenbergDecomposition& compute(const MatrixType& matrix)
     {
-      m_matrix = matrix.derived();
+      m_matrix = matrix;
       if(matrix.rows()<2)
       {
         m_isInitialized = true;

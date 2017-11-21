@@ -296,48 +296,6 @@ void drawMatrix(Matrix4 &T, vec str)
 
 }
 
-
-void assignDefaultFrame(Matrix4 &T)
-{
-
-	T.setColumn(0, vec(-1, 0, 0));
-	T.setColumn(1, vec(0, 1, 0));
-	T.setColumn(2, vec(0, 0, -1));
-	for (int i = 0; i < 3; i++)T.setColumn(i, T.getColumn(i).normalise());
-
-}
-
-void normaliseFrame(Matrix4 &T)
-{
-	for (int i = 0; i < 3; i++)T.setColumn(i, T.getColumn(i).normalise());
-}
-
-void angleBetweenFrames(Matrix3 rotA, Matrix3 rotB)
-{
-	for (int i = 0; i < 3; i++)
-		cout << rotA.getColumn(i).angle(rotB.getColumn(i)) << " ";
-	cout << endl;
-}
-
-void drawFrame(Matrix4 &t , float sz = 1)
-{
-
-	vec u, v, n, c;
-	u = t.getColumn(0);
-	v = t.getColumn(1);
-	n = t.getColumn(2);
-	c = t.getColumn(3);
-
-	glPointSize(5);
-	drawPoint(c);
-	glPointSize(1);
-
-	glColor3f(1, 0, 0); drawLine(c, c + u * sz);
-	glColor3f(0, 1, 0); drawLine(c, c + v * sz);
-	glColor3f(0, 0, 1); drawLine(c, c + n * sz);
-
-}
-
 vec rayPlaneIntersection(vec P0, vec ray, vec N, float d = 0)
 {
 	double t = -(P0 * N + d) / (ray * N);
@@ -1026,6 +984,11 @@ vector<string> splitString(const string& str, const string& delimiter)
 	return elements;
 }
 
+vec extractVecFromStringArray(int id, vector<string> &content)
+{
+	return vec(atof(content[id].c_str()), atof(content[id + 1].c_str()), atof(content[id + 2].c_str()));
+}
+
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -1177,6 +1140,39 @@ Mesh quickHull( vec *pts, int num)
 	for (int i = 0; i < M.n_f; i++)M.faces[i].faceVertices();
 
 	return M;
+}
+
+
+void quickHull(vec *pts, int num , qh_vertex_t *vertices, Mesh &M)
+{
+	//qh_vertex_t *vertices = new qh_vertex_t[num];
+
+	for (int i = 0; i < num; ++i) {
+
+		vertices[i].z = pts[i].z;
+		vertices[i].x = pts[i].x;
+		vertices[i].y = pts[i].y;
+	}
+
+	qh_mesh_t mesh = qh_quickhull3d(vertices, num);
+
+	M.n_e = M.n_f = M.n_v = 0;
+
+	for (int i = 0; i < mesh.nvertices; i++) M.createVertex(vec(mesh.vertices[i].x, mesh.vertices[i].y, mesh.vertices[i].z));
+
+	Vertex *fv[3];
+	for (int i = 0, j = 0; i < mesh.nindices; i += 3, j++)
+	{
+		fv[0] = &M.vertices[mesh.indices[i + 0]];
+		fv[1] = &M.vertices[mesh.indices[i + 1]];
+		fv[2] = &M.vertices[mesh.indices[i + 2]];
+
+		M.createFace(fv, 3);
+	}
+
+	for (int i = 0; i < M.n_f; i++)M.faces[i].faceVertices();
+
+	//return M;
 }
 
 

@@ -13,94 +13,13 @@
 namespace Eigen {
 namespace internal {
 
-
-/** \internal
- * \brief Template functor to compute the modulo between an array and a scalar.
- */
-template <typename Scalar>
-struct scalar_mod_op {
-  EIGEN_DEVICE_FUNC scalar_mod_op(const Scalar& divisor) : m_divisor(divisor) {}
-  EIGEN_DEVICE_FUNC inline Scalar operator() (const Scalar& a) const { return a % m_divisor; }
-  const Scalar m_divisor;
-};
-template <typename Scalar>
-struct functor_traits<scalar_mod_op<Scalar> >
-{ enum { Cost = scalar_div_cost<Scalar,false>::value, PacketAccess = false }; };
-
-
-/** \internal
- * \brief Template functor to compute the modulo between 2 arrays.
- */
-template <typename Scalar>
-struct scalar_mod2_op {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_mod2_op);
-  EIGEN_DEVICE_FUNC inline Scalar operator() (const Scalar& a, const Scalar& b) const { return a % b; }
-};
-template <typename Scalar>
-struct functor_traits<scalar_mod2_op<Scalar> >
-{ enum { Cost = scalar_div_cost<Scalar,false>::value, PacketAccess = false }; };
-
-template <typename Scalar>
-struct scalar_fmod_op {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_fmod_op);
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar
-  operator()(const Scalar& a, const Scalar& b) const {
-    return numext::fmod(a, b);
-  }
-};
-template <typename Scalar>
-struct functor_traits<scalar_fmod_op<Scalar> > {
-  enum { Cost = 13,  // Reciprocal throughput of FPREM on Haswell.
-         PacketAccess = false };
-};
-
-
-/** \internal
-  * \brief Template functor to compute the sigmoid of a scalar
-  * \sa class CwiseUnaryOp, ArrayBase::sigmoid()
-  */
-template <typename T>
-struct scalar_sigmoid_op {
-  EIGEN_EMPTY_STRUCT_CTOR(scalar_sigmoid_op)
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T operator()(const T& x) const {
-    const T one = T(1);
-    return one / (one + numext::exp(-x));
-  }
-
-  template <typename Packet> EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
-  Packet packetOp(const Packet& x) const {
-    const Packet one = pset1<Packet>(T(1));
-    return pdiv(one, padd(one, pexp(pnegate(x))));
-  }
-};
-
-template <typename T>
-struct functor_traits<scalar_sigmoid_op<T> > {
-  enum {
-    Cost = NumTraits<T>::AddCost * 2 + NumTraits<T>::MulCost * 6,
-    PacketAccess = packet_traits<T>::HasAdd && packet_traits<T>::HasDiv &&
-                   packet_traits<T>::HasNegate && packet_traits<T>::HasExp
-  };
-};
-
-
-template<typename Reducer, typename Device>
-struct reducer_traits {
-  enum {
-    Cost = 1,
-    PacketAccess = false
-  };
-};
-
 // Standard reduction functors
 template <typename T> struct SumReducer
 {
-  static const bool PacketAccess = packet_traits<T>::HasAdd;
-  static const bool IsStateful = false;
+  static const bool PacketAccess = true;
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) const {
-    internal::scalar_sum_op<T> sum_op;
-    *accum = sum_op(*accum, t);
+    (*accum) += t;
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reducePacket(const Packet& p, Packet* accum) const {
@@ -108,12 +27,11 @@ template <typename T> struct SumReducer
   }
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    internal::scalar_cast_op<int, T> conv;
-    return conv(0);
+    return static_cast<T>(0);
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet initializePacket() const {
-    return pset1<Packet>(initialize());
+    return pset1<Packet>(0);
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
     return accum;
@@ -124,31 +42,17 @@ template <typename T> struct SumReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    internal::scalar_sum_op<T> sum_op;
-    return sum_op(saccum, predux(vaccum));
+    return saccum + predux(vaccum);
   }
 };
 
-template <typename T, typename Device>
-struct reducer_traits<SumReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = PacketType<T, Device>::HasAdd
-  };
-};
-
-
 template <typename T> struct MeanReducer
 {
-  static const bool PacketAccess = packet_traits<T>::HasAdd && !NumTraits<T>::IsInteger;
-  static const bool IsStateful = true;
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE
+  static const bool PacketAccess = true;
   MeanReducer() : scalarCount_(0), packetCount_(0) { }
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) {
-    internal::scalar_sum_op<T> sum_op;
-    *accum = sum_op(*accum, t);
+    (*accum) += t;
     scalarCount_++;
   }
   template <typename Packet>
@@ -158,12 +62,11 @@ template <typename T> struct MeanReducer
   }
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    internal::scalar_cast_op<int, T> conv;
-    return conv(0);
+    return static_cast<T>(0);
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet initializePacket() const {
-    return pset1<Packet>(initialize());
+    return pset1<Packet>(0);
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
     return accum / scalarCount_;
@@ -174,54 +77,17 @@ template <typename T> struct MeanReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    internal::scalar_sum_op<T> sum_op;
-    return sum_op(saccum, predux(vaccum)) / (scalarCount_ + packetCount_ * unpacket_traits<Packet>::size);
+    return (saccum + predux(vaccum)) / (scalarCount_ + packetCount_ * packet_traits<Packet>::size);
   }
 
   protected:
-    DenseIndex scalarCount_;
-    DenseIndex packetCount_;
+    int scalarCount_;
+    int packetCount_;
 };
-
-template <typename T, typename Device>
-struct reducer_traits<MeanReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = PacketType<T, Device>::HasAdd
-  };
-};
-
-
-template <typename T, bool IsMax = true, bool IsInteger = true>
-struct MinMaxBottomValue {
-  EIGEN_DEVICE_FUNC static EIGEN_STRONG_INLINE T bottom_value() {
-    return Eigen::NumTraits<T>::lowest();
-  }
-};
-template <typename T>
-struct MinMaxBottomValue<T, true, false> {
-  EIGEN_DEVICE_FUNC static EIGEN_STRONG_INLINE T bottom_value() {
-    return -Eigen::NumTraits<T>::infinity();
-  }
-};
-template <typename T>
-struct MinMaxBottomValue<T, false, true> {
-  EIGEN_DEVICE_FUNC static EIGEN_STRONG_INLINE T bottom_value() {
-    return Eigen::NumTraits<T>::highest();
-  }
-};
-template <typename T>
-struct MinMaxBottomValue<T, false, false> {
-  EIGEN_DEVICE_FUNC static EIGEN_STRONG_INLINE T bottom_value() {
-    return Eigen::NumTraits<T>::infinity();
-  }
-};
-
 
 template <typename T> struct MaxReducer
 {
-  static const bool PacketAccess = packet_traits<T>::HasMax;
-  static const bool IsStateful = false;
+  static const bool PacketAccess = true;
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) const {
     if (t > *accum) { *accum = t; }
@@ -230,12 +96,13 @@ template <typename T> struct MaxReducer
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reducePacket(const Packet& p, Packet* accum) const {
     (*accum) = pmax<Packet>(*accum, p);
   }
+
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    return MinMaxBottomValue<T, true, Eigen::NumTraits<T>::IsInteger>::bottom_value();
+    return -(std::numeric_limits<T>::max)();
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet initializePacket() const {
-    return pset1<Packet>(initialize());
+    return pset1<Packet>(-(std::numeric_limits<T>::max)());
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
     return accum;
@@ -246,23 +113,13 @@ template <typename T> struct MaxReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    return numext::maxi(saccum, predux_max(vaccum));
+    return (std::max)(saccum, predux_max(vaccum));
   }
 };
 
-template <typename T, typename Device>
-struct reducer_traits<MaxReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = PacketType<T, Device>::HasMax
-  };
-};
-
-
 template <typename T> struct MinReducer
 {
-  static const bool PacketAccess = packet_traits<T>::HasMin;
-  static const bool IsStateful = false;
+  static const bool PacketAccess = true;
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) const {
     if (t < *accum) { *accum = t; }
@@ -271,12 +128,13 @@ template <typename T> struct MinReducer
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reducePacket(const Packet& p, Packet* accum) const {
     (*accum) = pmin<Packet>(*accum, p);
   }
+
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    return MinMaxBottomValue<T, false, Eigen::NumTraits<T>::IsInteger>::bottom_value();
+    return (std::numeric_limits<T>::max)();
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet initializePacket() const {
-    return pset1<Packet>(initialize());
+    return pset1<Packet>((std::numeric_limits<T>::max)());
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
     return accum;
@@ -287,27 +145,17 @@ template <typename T> struct MinReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    return numext::mini(saccum, predux_min(vaccum));
+    return (std::min)(saccum, predux_min(vaccum));
   }
-};
-
-template <typename T, typename Device>
-struct reducer_traits<MinReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = PacketType<T, Device>::HasMin
-  };
 };
 
 
 template <typename T> struct ProdReducer
 {
-  static const bool PacketAccess = packet_traits<T>::HasMul;
-  static const bool IsStateful = false;
+  static const bool PacketAccess = true;
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) const {
-    internal::scalar_product_op<T> prod_op;
-    (*accum) = prod_op(*accum, t);
+    (*accum) *= t;
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reducePacket(const Packet& p, Packet* accum) const {
@@ -315,12 +163,11 @@ template <typename T> struct ProdReducer
   }
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    internal::scalar_cast_op<int, T> conv;
-    return conv(1);
+    return static_cast<T>(1);
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Packet initializePacket() const {
-    return pset1<Packet>(initialize());
+    return pset1<Packet>(1);
   }
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T accum) const {
     return accum;
@@ -331,157 +178,159 @@ template <typename T> struct ProdReducer
   }
   template <typename Packet>
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalizeBoth(const T saccum, const Packet& vaccum) const {
-    internal::scalar_product_op<T> prod_op;
-    return prod_op(saccum, predux_mul(vaccum));
+    return saccum * predux_mul(vaccum);
   }
 };
 
-template <typename T, typename Device>
-struct reducer_traits<ProdReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::MulCost,
-    PacketAccess = PacketType<T, Device>::HasMul
-  };
-};
+#if !defined (EIGEN_USE_GPU) || !defined(__CUDACC__) || !defined(__CUDA_ARCH__)
+// We're not compiling a cuda kernel
+template <typename T> struct UniformRandomGenerator {
 
+  static const bool PacketAccess = true;
 
-struct AndReducer
-{
-  static const bool PacketAccess = false;
-  static const bool IsStateful = false;
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(bool t, bool* accum) const {
-    *accum = *accum && t;
+  template<typename Index>
+  T operator()(Index, Index = 0) const {
+    return random<T>();
   }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE bool initialize() const {
-    return true;
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE bool finalize(bool accum) const {
-    return accum;
-  }
-};
-
-template <typename Device>
-struct reducer_traits<AndReducer, Device> {
-  enum {
-    Cost = 1,
-    PacketAccess = false
-  };
-};
-
-
-struct OrReducer {
-  static const bool PacketAccess = false;
-  static const bool IsStateful = false;
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(bool t, bool* accum) const {
-    *accum = *accum || t;
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE bool initialize() const {
-    return false;
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE bool finalize(bool accum) const {
-    return accum;
-  }
-};
-
-template <typename Device>
-struct reducer_traits<OrReducer, Device> {
-  enum {
-    Cost = 1,
-    PacketAccess = false
-  };
-};
-
-
-// Argmin/Argmax reducers
-template <typename T> struct ArgMaxTupleReducer
-{
-  static const bool PacketAccess = false;
-  static const bool IsStateful = false;
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T t, T* accum) const {
-    if (t.second > accum->second) { *accum = t; }
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    return T(0, NumTraits<typename T::second_type>::lowest());
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T& accum) const {
-    return accum;
-  }
-};
-
-template <typename T, typename Device>
-struct reducer_traits<ArgMaxTupleReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = false
-  };
-};
-
-
-template <typename T> struct ArgMinTupleReducer
-{
-  static const bool PacketAccess = false;
-  static const bool IsStateful = false;
-
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void reduce(const T& t, T* accum) const {
-    if (t.second < accum->second) { *accum = t; }
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T initialize() const {
-    return T(0, NumTraits<typename T::second_type>::highest());
-  }
-  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE T finalize(const T& accum) const {
-    return accum;
-  }
-};
-
-template <typename T, typename Device>
-struct reducer_traits<ArgMinTupleReducer<T>, Device> {
-  enum {
-    Cost = NumTraits<T>::AddCost,
-    PacketAccess = false
-  };
-};
-
-
-template <typename T, typename Index, size_t NumDims>
-class GaussianGenerator {
- public:
-  static const bool PacketAccess = false;
-
-  EIGEN_DEVICE_FUNC GaussianGenerator(const array<T, NumDims>& means,
-                                      const array<T, NumDims>& std_devs)
-      : m_means(means)
-  {
-    for (size_t i = 0; i < NumDims; ++i) {
-      m_two_sigmas[i] = std_devs[i] * std_devs[i] * 2;
+  template<typename Index>
+  typename internal::packet_traits<T>::type packetOp(Index, Index = 0) const {
+    const int packetSize = internal::packet_traits<T>::size;
+    EIGEN_ALIGN_DEFAULT T values[packetSize];
+    for (int i = 0; i < packetSize; ++i) {
+      values[i] = random<T>();
     }
+    return internal::pload<typename internal::packet_traits<T>::type>(values);
+  }
+};
+
+#else
+
+// We're compiling a cuda kernel
+template <typename T> struct UniformRandomGenerator;
+
+template <> struct UniformRandomGenerator<float> {
+
+  static const bool PacketAccess = true;
+
+  EIGEN_DEVICE_FUNC UniformRandomGenerator() {
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    curand_init(0, tid, 0, &m_state);
   }
 
-  EIGEN_DEVICE_FUNC T operator()(const array<Index, NumDims>& coordinates) const {
-    T tmp = T(0);
-    for (size_t i = 0; i < NumDims; ++i) {
-      T offset = coordinates[i] - m_means[i];
-      tmp += offset * offset / m_two_sigmas[i];
-    }
-    return numext::exp(-tmp);
+  template<typename Index> EIGEN_DEVICE_FUNC
+  float operator()(Index, Index = 0) const {
+    return curand_uniform(&m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  float4 packetOp(Index, Index = 0) const {
+    return curand_uniform4(&m_state);
   }
 
  private:
-  array<T, NumDims> m_means;
-  array<T, NumDims> m_two_sigmas;
+  mutable curandStatePhilox4_32_10_t m_state;
 };
 
-template <typename T, typename Index, size_t NumDims>
-struct functor_traits<GaussianGenerator<T, Index, NumDims> > {
-  enum {
-    Cost = NumDims * (2 * NumTraits<T>::AddCost + NumTraits<T>::MulCost +
-                      functor_traits<scalar_quotient_op<T, T> >::Cost) +
-           functor_traits<scalar_exp_op<T> >::Cost,
-    PacketAccess = GaussianGenerator<T, Index, NumDims>::PacketAccess
-  };
+template <> struct UniformRandomGenerator<double> {
+
+  static const bool PacketAccess = true;
+
+  EIGEN_DEVICE_FUNC UniformRandomGenerator() {
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    curand_init(0, tid, 0, &m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  double operator()(Index, Index = 0) const {
+    return curand_uniform_double(&m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  double2 packetOp(Index, Index = 0) const {
+    return curand_uniform2_double(&m_state);
+  }
+
+ private:
+  mutable curandStatePhilox4_32_10_t m_state;
 };
+
+#endif
+
+
+#if (!defined (EIGEN_USE_GPU) || !defined(__CUDACC__) || !defined(__CUDA_ARCH__)) && __cplusplus > 199711
+// We're not compiling a cuda kernel
+template <typename T> struct NormalRandomGenerator {
+
+  static const bool PacketAccess = true;
+
+  NormalRandomGenerator() : m_distribution(0, 1) {}
+  NormalRandomGenerator(const NormalRandomGenerator& other) : m_distribution(other.m_distribution) { }
+
+  template<typename Index>
+  T operator()(Index, Index = 0) const {
+    return m_distribution(m_generator);
+  }
+  template<typename Index>
+  typename internal::packet_traits<T>::type packetOp(Index, Index = 0) const {
+    const int packetSize = internal::packet_traits<T>::size;
+    EIGEN_ALIGN_DEFAULT T values[packetSize];
+    for (int i = 0; i < packetSize; ++i) {
+      values[i] = m_distribution(m_generator);
+    }
+    return internal::pload<typename internal::packet_traits<T>::type>(values);
+  }
+
+  mutable std::normal_distribution<T> m_distribution;
+  mutable std::default_random_engine m_generator;
+};
+
+#elif defined (EIGEN_USE_GPU) && defined(__CUDACC__) && defined(__CUDA_ARCH__)
+
+// We're compiling a cuda kernel
+template <typename T> struct NormalRandomGenerator;
+
+template <> struct NormalRandomGenerator<float> {
+
+  static const bool PacketAccess = true;
+
+  EIGEN_DEVICE_FUNC NormalRandomGenerator() {
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    curand_init(0, tid, 0, &m_state);
+  }
+
+  template<typename Index> EIGEN_DEVICE_FUNC
+  float operator()(Index, Index = 0) const {
+    return curand_normal(&m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  float4 packetOp(Index, Index = 0) const {
+    return curand_normal4(&m_state);
+  }
+
+ private:
+  mutable curandStatePhilox4_32_10_t m_state;
+};
+
+template <> struct NormalRandomGenerator<double> {
+
+  static const bool PacketAccess = true;
+
+  EIGEN_DEVICE_FUNC NormalRandomGenerator() {
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    curand_init(0, tid, 0, &m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  double operator()(Index, Index = 0) const {
+    return curand_normal_double(&m_state);
+  }
+  template<typename Index> EIGEN_DEVICE_FUNC
+  double2 packetOp(Index, Index = 0) const {
+    return curand_normal2_double(&m_state);
+  }
+
+ private:
+  mutable curandStatePhilox4_32_10_t m_state;
+};
+
+#endif
+
 
 } // end namespace internal
 } // end namespace Eigen

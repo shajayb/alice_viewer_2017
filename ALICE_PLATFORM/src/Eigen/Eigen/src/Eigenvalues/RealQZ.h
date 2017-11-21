@@ -101,7 +101,7 @@ namespace Eigen {
        *
        * This constructor calls compute() to compute the QZ decomposition.
        */
-      RealQZ(const MatrixType& A, const MatrixType& B, bool computeQZ = true) :
+      explicit RealQZ(const MatrixType& A, const MatrixType& B, bool computeQZ = true) :
         m_S(A.rows(),A.cols()),
         m_T(A.rows(),A.cols()),
         m_Q(A.rows(),A.cols()),
@@ -240,10 +240,10 @@ namespace Eigen {
             m_S.coeffRef(i,j) = Scalar(0.0);
             m_S.rightCols(dim-j-1).applyOnTheLeft(i-1,i,G.adjoint());
             m_T.rightCols(dim-i+1).applyOnTheLeft(i-1,i,G.adjoint());
-            // update Q
-            if (m_computeQZ)
-              m_Q.applyOnTheRight(i-1,i,G);
           }
+          // update Q
+          if (m_computeQZ)
+            m_Q.applyOnTheRight(i-1,i,G);
           // kill T(i,i-1)
           if(m_T.coeff(i,i-1)!=Scalar(0))
           {
@@ -251,10 +251,10 @@ namespace Eigen {
             m_T.coeffRef(i,i-1) = Scalar(0.0);
             m_S.applyOnTheRight(i,i-1,G);
             m_T.topRows(i).applyOnTheRight(i,i-1,G);
-            // update Z
-            if (m_computeQZ)
-              m_Z.applyOnTheLeft(i,i-1,G.adjoint());
           }
+          // update Z
+          if (m_computeQZ)
+            m_Z.applyOnTheLeft(i,i-1,G.adjoint());
         }
       }
     }
@@ -315,8 +315,8 @@ namespace Eigen {
       const Index dim=m_S.cols();
       if (abs(m_S.coeff(i+1,i))==Scalar(0))
         return;
-      Index j = findSmallDiagEntry(i,i+1);
-      if (j==i-1)
+      Index z = findSmallDiagEntry(i,i+1);
+      if (z==i-1)
       {
         // block of (S T^{-1})
         Matrix2s STi = m_T.template block<2,2>(i,i).template triangularView<Upper>().
@@ -352,7 +352,7 @@ namespace Eigen {
       }
       else
       {
-        pushDownZero(j,i,i+1);
+        pushDownZero(z,i,i+1);
       }
     }
 
@@ -552,6 +552,7 @@ namespace Eigen {
       m_T.coeffRef(l,l-1) = Scalar(0.0);
     }
 
+
   template<typename MatrixType>
     RealQZ<MatrixType>& RealQZ<MatrixType>::compute(const MatrixType& A_in, const MatrixType& B_in, bool computeQZ)
     {
@@ -615,37 +616,6 @@ namespace Eigen {
       }
       // check if we converged before reaching iterations limit
       m_info = (local_iter<m_maxIters) ? Success : NoConvergence;
-
-      // For each non triangular 2x2 diagonal block of S,
-      //    reduce the respective 2x2 diagonal block of T to positive diagonal form using 2x2 SVD.
-      // This step is not mandatory for QZ, but it does help further extraction of eigenvalues/eigenvectors,
-      // and is in par with Lapack/Matlab QZ.
-      if(m_info==Success)
-      {
-        for(Index i=0; i<dim-1; ++i)
-        {
-          if(m_S.coeff(i+1, i) != Scalar(0))
-          {
-            JacobiRotation<Scalar> j_left, j_right;
-            internal::real_2x2_jacobi_svd(m_T, i, i+1, &j_left, &j_right);
-
-            // Apply resulting Jacobi rotations
-            m_S.applyOnTheLeft(i,i+1,j_left);
-            m_S.applyOnTheRight(i,i+1,j_right);
-            m_T.applyOnTheLeft(i,i+1,j_left);
-            m_T.applyOnTheRight(i,i+1,j_right);
-            m_T(i+1,i) = m_T(i,i+1) = Scalar(0);
-
-            if(m_computeQZ) {
-              m_Q.applyOnTheRight(i,i+1,j_left.transpose());
-              m_Z.applyOnTheLeft(i,i+1,j_right.transpose());
-            }
-
-            i++;
-          }
-        }
-      }
-
       return *this;
     } // end compute
 

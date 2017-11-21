@@ -9,11 +9,11 @@
 
 #include "common.h"
 
-int EIGEN_BLAS_FUNC(axpy)(const int *n, const RealScalar *palpha, const RealScalar *px, const int *incx, RealScalar *py, const int *incy)
+int EIGEN_BLAS_FUNC(axpy)(int *n, RealScalar *palpha, RealScalar *px, int *incx, RealScalar *py, int *incy)
 {
-  const Scalar* x = reinterpret_cast<const Scalar*>(px);
+  Scalar* x = reinterpret_cast<Scalar*>(px);
   Scalar* y = reinterpret_cast<Scalar*>(py);
-  Scalar alpha  = *reinterpret_cast<const Scalar*>(palpha);
+  Scalar alpha  = *reinterpret_cast<Scalar*>(palpha);
 
   if(*n<=0) return 0;
 

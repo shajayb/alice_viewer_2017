@@ -19,21 +19,20 @@ namespace internal {
     
 /** \internal
   * \ingroup OrderingMethods_Module
-  * \param[in] A the input non-symmetric matrix
-  * \param[out] symmat the symmetric pattern A^T+A from the input matrix \a A.
+  * \returns the symmetric pattern A^T+A from the input matrix A. 
   * FIXME: The values should not be considered here
   */
 template<typename MatrixType> 
-void ordering_helper_at_plus_a(const MatrixType& A, MatrixType& symmat)
+void ordering_helper_at_plus_a(const MatrixType& mat, MatrixType& symmat)
 {
   MatrixType C;
-  C = A.transpose(); // NOTE: Could be  costly
+  C = mat.transpose(); // NOTE: Could be  costly
   for (int i = 0; i < C.rows(); i++) 
   {
       for (typename MatrixType::InnerIterator it(C, i); it; ++it)
         it.valueRef() = 0.0;
   }
-  symmat = C + A;
+  symmat = C + mat; 
 }
     
 }
@@ -45,14 +44,14 @@ void ordering_helper_at_plus_a(const MatrixType& A, MatrixType& symmat)
   *
   * Functor computing the \em approximate \em minimum \em degree ordering
   * If the matrix is not structurally symmetric, an ordering of A^T+A is computed
-  * \tparam  StorageIndex The type of indices of the matrix 
+  * \tparam  Index The type of indices of the matrix 
   * \sa COLAMDOrdering
   */
-template <typename StorageIndex>
+template <typename Index>
 class AMDOrdering
 {
   public:
-    typedef PermutationMatrix<Dynamic, Dynamic, StorageIndex> PermutationType;
+    typedef PermutationMatrix<Dynamic, Dynamic, Index> PermutationType;
     
     /** Compute the permutation vector from a sparse matrix
      * This routine is much faster if the input matrix is column-major     
@@ -61,7 +60,7 @@ class AMDOrdering
     void operator()(const MatrixType& mat, PermutationType& perm)
     {
       // Compute the symmetric pattern
-      SparseMatrix<typename MatrixType::Scalar, ColMajor, StorageIndex> symm;
+      SparseMatrix<typename MatrixType::Scalar, ColMajor, Index> symm;
       internal::ordering_helper_at_plus_a(mat,symm); 
     
       // Call the AMD routine 
@@ -73,7 +72,7 @@ class AMDOrdering
     template <typename SrcType, unsigned int SrcUpLo> 
     void operator()(const SparseSelfAdjointView<SrcType, SrcUpLo>& mat, PermutationType& perm)
     { 
-      SparseMatrix<typename SrcType::Scalar, ColMajor, StorageIndex> C; C = mat;
+      SparseMatrix<typename SrcType::Scalar, ColMajor, Index> C; C = mat;
       
       // Call the AMD routine 
       // m_mat.prune(keep_diag()); //Remove the diagonal elements 
@@ -89,13 +88,13 @@ class AMDOrdering
   * Functor computing the natural ordering (identity)
   * 
   * \note Returns an empty permutation matrix
-  * \tparam  StorageIndex The type of indices of the matrix 
+  * \tparam  Index The type of indices of the matrix 
   */
-template <typename StorageIndex>
+template <typename Index>
 class NaturalOrdering
 {
   public:
-    typedef PermutationMatrix<Dynamic, Dynamic, StorageIndex> PermutationType;
+    typedef PermutationMatrix<Dynamic, Dynamic, Index> PermutationType;
     
     /** Compute the permutation vector from a column-major sparse matrix */
     template <typename MatrixType>
@@ -109,8 +108,6 @@ class NaturalOrdering
 /** \ingroup OrderingMethods_Module
   * \class COLAMDOrdering
   *
-  * \tparam  StorageIndex The type of indices of the matrix 
-  * 
   * Functor computing the \em column \em approximate \em minimum \em degree ordering 
   * The matrix should be in column-major and \b compressed format (see SparseMatrix::makeCompressed()).
   */

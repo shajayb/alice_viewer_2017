@@ -30,7 +30,7 @@ struct selfadjoint_matrix_vector_product
 static EIGEN_DONT_INLINE void run(
   Index size,
   const Scalar*  lhs, Index lhsStride,
-  const Scalar*  rhs,
+  const Scalar* _rhs, Index rhsIncr,
   Scalar* res,
   Scalar alpha);
 };
@@ -39,12 +39,11 @@ template<typename Scalar, typename Index, int StorageOrder, int UpLo, bool Conju
 EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrder,UpLo,ConjugateLhs,ConjugateRhs,Version>::run(
   Index size,
   const Scalar*  lhs, Index lhsStride,
-  const Scalar*  rhs,
+  const Scalar* _rhs, Index rhsIncr,
   Scalar* res,
   Scalar alpha)
 {
   typedef typename packet_traits<Scalar>::type Packet;
-  typedef typename NumTraits<Scalar>::Real RealScalar;
   const Index PacketSize = sizeof(Packet)/sizeof(Scalar);
 
   enum {
@@ -55,13 +54,23 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
 
   conj_helper<Scalar,Scalar,NumTraits<Scalar>::IsComplex && EIGEN_LOGICAL_XOR(ConjugateLhs,  IsRowMajor), ConjugateRhs> cj0;
   conj_helper<Scalar,Scalar,NumTraits<Scalar>::IsComplex && EIGEN_LOGICAL_XOR(ConjugateLhs, !IsRowMajor), ConjugateRhs> cj1;
-  conj_helper<RealScalar,Scalar,false, ConjugateRhs> cjd;
+  conj_helper<Scalar,Scalar,NumTraits<Scalar>::IsComplex, ConjugateRhs> cjd;
 
   conj_helper<Packet,Packet,NumTraits<Scalar>::IsComplex && EIGEN_LOGICAL_XOR(ConjugateLhs,  IsRowMajor), ConjugateRhs> pcj0;
   conj_helper<Packet,Packet,NumTraits<Scalar>::IsComplex && EIGEN_LOGICAL_XOR(ConjugateLhs, !IsRowMajor), ConjugateRhs> pcj1;
 
   Scalar cjAlpha = ConjugateRhs ? numext::conj(alpha) : alpha;
 
+  // FIXME this copy is now handled outside product_selfadjoint_vector, so it could probably be removed.
+  // if the rhs is not sequentially stored in memory we copy it to a temporary buffer,
+  // this is because we need to extract packets
+  ei_declare_aligned_stack_constructed_variable(Scalar,rhs,size,rhsIncr==1 ? const_cast<Scalar*>(_rhs) : 0);  
+  if (rhsIncr!=1)
+  {
+    const Scalar* it = _rhs;
+    for (Index i=0; i<size; ++i, it+=rhsIncr)
+      rhs[i] = *it;
+  }
 
   Index bound = (std::max)(Index(0),size-8) & 0xfffffffe;
   if (FirstTriangular)
@@ -83,11 +92,12 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
     Scalar t3(0);
     Packet ptmp3 = pset1<Packet>(t3);
 
-    Index starti = FirstTriangular ? 0 : j+2;
-    Index endi   = FirstTriangular ? j : size;
-    Index alignedStart = (starti) + internal::first_default_aligned(&res[starti], endi-starti);
-    Index alignedEnd = alignedStart + ((endi-alignedStart)/(PacketSize))*(PacketSize);
+    size_t starti = FirstTriangular ? 0 : j+2;
+    size_t endi   = FirstTriangular ? j : size;
+    size_t alignedStart = (starti) + internal::first_aligned(&res[starti], endi-starti);
+    size_t alignedEnd = alignedStart + ((endi-alignedStart)/(PacketSize))*(PacketSize);
 
+    // TODO make sure this product is a real * complex and that the rhs is properly conjugated if needed
     res[j]   += cjd.pmul(numext::real(A0[j]), t0);
     res[j+1] += cjd.pmul(numext::real(A1[j+1]), t1);
     if(FirstTriangular)
@@ -101,7 +111,7 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
       t2 += cj1.pmul(A0[j+1], rhs[j+1]);
     }
 
-    for (Index i=starti; i<alignedStart; ++i)
+    for (size_t i=starti; i<alignedStart; ++i)
     {
       res[i] += cj0.pmul(A0[i], t0) + cj0.pmul(A1[i],t1);
       t2 += cj1.pmul(A0[i], rhs[i]);
@@ -113,7 +123,7 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
     const Scalar* EIGEN_RESTRICT a1It  = A1  + alignedStart;
     const Scalar* EIGEN_RESTRICT rhsIt = rhs + alignedStart;
           Scalar* EIGEN_RESTRICT resIt = res + alignedStart;
-    for (Index i=alignedStart; i<alignedEnd; i+=PacketSize)
+    for (size_t i=alignedStart; i<alignedEnd; i+=PacketSize)
     {
       Packet A0i = ploadu<Packet>(a0It);  a0It  += PacketSize;
       Packet A1i = ploadu<Packet>(a1It);  a1It  += PacketSize;
@@ -125,7 +135,7 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
       ptmp3 = pcj1.pmadd(A1i,  Bi, ptmp3);
       pstore(resIt,Xi); resIt += PacketSize;
     }
-    for (Index i=alignedEnd; i<endi; i++)
+    for (size_t i=alignedEnd; i<endi; i++)
     {
       res[i] += cj0.pmul(A0[i], t0) + cj0.pmul(A1[i],t1);
       t2 += cj1.pmul(A0[i], rhs[i]);
@@ -141,6 +151,7 @@ EIGEN_DONT_INLINE void selfadjoint_matrix_vector_product<Scalar,Index,StorageOrd
 
     Scalar t1 = cjAlpha * rhs[j];
     Scalar t2(0);
+    // TODO make sure this product is a real * complex and that the rhs is properly conjugated if needed
     res[j] += cjd.pmul(numext::real(A0[j]), t1);
     for (Index i=FirstTriangular ? 0 : j+1; i<(FirstTriangular ? j : size); i++)
     {
@@ -179,7 +190,7 @@ struct selfadjoint_product_impl<Lhs,LhsMode,false,Rhs,0,true>
   {
     typedef typename Dest::Scalar ResScalar;
     typedef typename Rhs::Scalar RhsScalar;
-    typedef Map<Matrix<ResScalar,Dynamic,1>, EIGEN_PLAIN_ENUM_MIN(AlignedMax,internal::packet_traits<ResScalar>::size)> MappedDest;
+    typedef Map<Matrix<ResScalar,Dynamic,1>, Aligned> MappedDest;
     
     eigen_assert(dest.rows()==a_lhs.rows() && dest.cols()==a_rhs.cols());
 
@@ -227,7 +238,7 @@ struct selfadjoint_product_impl<Lhs,LhsMode,false,Rhs,0,true>
       (
         lhs.rows(),                             // size
         &lhs.coeffRef(0,0),  lhs.outerStride(), // lhs info
-        actualRhsPtr,                           // rhs info
+        actualRhsPtr, 1,                        // rhs info
         actualDestPtr,                          // result info
         actualAlpha                             // scale factor
       );

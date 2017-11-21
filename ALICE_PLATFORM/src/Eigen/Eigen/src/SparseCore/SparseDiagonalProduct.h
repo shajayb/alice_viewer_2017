@@ -1,7 +1,7 @@
 // This file is part of Eigen, a lightweight C++ template library
 // for linear algebra.
 //
-// Copyright (C) 2009-2015 Gael Guennebaud <gael.guennebaud@inria.fr>
+// Copyright (C) 2009-2014 Gael Guennebaud <gael.guennebaud@inria.fr>
 //
 // This Source Code Form is subject to the terms of the Mozilla
 // Public License v. 2.0. If a copy of the MPL was not distributed
@@ -35,29 +35,33 @@ template<typename SparseXprType, typename DiagonalCoeffType, int SDP_Tag>
 struct sparse_diagonal_product_evaluator;
 
 template<typename Lhs, typename Rhs, int ProductTag>
-struct product_evaluator<Product<Lhs, Rhs, DefaultProduct>, ProductTag, DiagonalShape, SparseShape>
+struct product_evaluator<Product<Lhs, Rhs, DefaultProduct>, ProductTag, DiagonalShape, SparseShape, typename traits<Lhs>::Scalar, typename traits<Rhs>::Scalar> 
   : public sparse_diagonal_product_evaluator<Rhs, typename Lhs::DiagonalVectorType, Rhs::Flags&RowMajorBit?SDP_AsScalarProduct:SDP_AsCwiseProduct>
 {
   typedef Product<Lhs, Rhs, DefaultProduct> XprType;
-  enum { CoeffReadCost = HugeCost, Flags = Rhs::Flags&RowMajorBit, Alignment = 0 }; // FIXME CoeffReadCost & Flags
+  typedef evaluator<XprType> type;
+  typedef evaluator<XprType> nestedType;
+  enum { CoeffReadCost = Dynamic, Flags = Rhs::Flags&RowMajorBit }; // FIXME CoeffReadCost & Flags
   
   typedef sparse_diagonal_product_evaluator<Rhs, typename Lhs::DiagonalVectorType, Rhs::Flags&RowMajorBit?SDP_AsScalarProduct:SDP_AsCwiseProduct> Base;
   explicit product_evaluator(const XprType& xpr) : Base(xpr.rhs(), xpr.lhs().diagonal()) {}
 };
 
 template<typename Lhs, typename Rhs, int ProductTag>
-struct product_evaluator<Product<Lhs, Rhs, DefaultProduct>, ProductTag, SparseShape, DiagonalShape>
+struct product_evaluator<Product<Lhs, Rhs, DefaultProduct>, ProductTag, SparseShape, DiagonalShape, typename traits<Lhs>::Scalar, typename traits<Rhs>::Scalar> 
   : public sparse_diagonal_product_evaluator<Lhs, Transpose<const typename Rhs::DiagonalVectorType>, Lhs::Flags&RowMajorBit?SDP_AsCwiseProduct:SDP_AsScalarProduct>
 {
   typedef Product<Lhs, Rhs, DefaultProduct> XprType;
-  enum { CoeffReadCost = HugeCost, Flags = Lhs::Flags&RowMajorBit, Alignment = 0 }; // FIXME CoeffReadCost & Flags
+  typedef evaluator<XprType> type;
+  typedef evaluator<XprType> nestedType;
+  enum { CoeffReadCost = Dynamic, Flags = Lhs::Flags&RowMajorBit }; // FIXME CoeffReadCost & Flags
   
   typedef sparse_diagonal_product_evaluator<Lhs, Transpose<const typename Rhs::DiagonalVectorType>, Lhs::Flags&RowMajorBit?SDP_AsCwiseProduct:SDP_AsScalarProduct> Base;
   explicit product_evaluator(const XprType& xpr) : Base(xpr.lhs(), xpr.rhs().diagonal().transpose()) {}
 };
 
 template<typename SparseXprType, typename DiagonalCoeffType>
-struct sparse_diagonal_product_evaluator<SparseXprType, DiagonalCoeffType, SDP_AsScalarProduct>
+struct sparse_diagonal_product_evaluator<SparseXprType, DiagonalCoeffType, SDP_AsScalarProduct> 
 {
 protected:
   typedef typename evaluator<SparseXprType>::InnerIterator SparseXprInnerIterator;
@@ -80,55 +84,58 @@ public:
   sparse_diagonal_product_evaluator(const SparseXprType &sparseXpr, const DiagonalCoeffType &diagCoeff)
     : m_sparseXprImpl(sparseXpr), m_diagCoeffImpl(diagCoeff)
   {}
-
-  Index nonZerosEstimate() const { return m_sparseXprImpl.nonZerosEstimate(); }
     
 protected:
-  evaluator<SparseXprType> m_sparseXprImpl;
-  evaluator<DiagonalCoeffType> m_diagCoeffImpl;
+  typename evaluator<SparseXprType>::nestedType m_sparseXprImpl;
+  typename evaluator<DiagonalCoeffType>::nestedType m_diagCoeffImpl;
 };
 
 
 template<typename SparseXprType, typename DiagCoeffType>
-struct sparse_diagonal_product_evaluator<SparseXprType, DiagCoeffType, SDP_AsCwiseProduct>
+struct sparse_diagonal_product_evaluator<SparseXprType, DiagCoeffType, SDP_AsCwiseProduct> 
 {
   typedef typename SparseXprType::Scalar Scalar;
-  typedef typename SparseXprType::StorageIndex StorageIndex;
   
-  typedef typename nested_eval<DiagCoeffType,SparseXprType::IsRowMajor ? SparseXprType::RowsAtCompileTime
-                                                                       : SparseXprType::ColsAtCompileTime>::type DiagCoeffNested;
+  typedef CwiseBinaryOp<scalar_product_op<Scalar>,
+                        const typename SparseXprType::ConstInnerVectorReturnType,
+                        const DiagCoeffType> CwiseProductType;
+                        
+  typedef typename evaluator<CwiseProductType>::type CwiseProductEval;
+  typedef typename evaluator<CwiseProductType>::InnerIterator CwiseProductIterator;
   
   class InnerIterator
   {
-    typedef typename evaluator<SparseXprType>::InnerIterator SparseXprIter;
   public:
     InnerIterator(const sparse_diagonal_product_evaluator &xprEval, Index outer)
-      : m_sparseIter(xprEval.m_sparseXprEval, outer), m_diagCoeffNested(xprEval.m_diagCoeffNested)
+      : m_cwiseEval(xprEval.m_sparseXprNested.innerVector(outer).cwiseProduct(xprEval.m_diagCoeffNested)),
+        m_cwiseIter(m_cwiseEval, 0),
+        m_outer(outer)
     {}
     
-    inline Scalar value() const { return m_sparseIter.value() * m_diagCoeffNested.coeff(index()); }
-    inline StorageIndex index() const  { return m_sparseIter.index(); }
-    inline Index outer() const  { return m_sparseIter.outer(); }
-    inline Index col() const    { return SparseXprType::IsRowMajor ? m_sparseIter.index() : m_sparseIter.outer(); }
-    inline Index row() const    { return SparseXprType::IsRowMajor ? m_sparseIter.outer() : m_sparseIter.index(); }
+    inline Scalar value() const { return m_cwiseIter.value(); }
+    inline Index index() const  { return m_cwiseIter.index(); }
+    inline Index outer() const  { return m_outer; }
+    inline Index col() const    { return SparseXprType::IsRowMajor ? m_cwiseIter.index() : m_outer; }
+    inline Index row() const    { return SparseXprType::IsRowMajor ? m_outer : m_cwiseIter.index(); }
     
-    EIGEN_STRONG_INLINE InnerIterator& operator++() { ++m_sparseIter; return *this; }
-    inline operator bool() const  { return m_sparseIter; }
+    EIGEN_STRONG_INLINE InnerIterator& operator++()
+    { ++m_cwiseIter; return *this; }
+    inline operator bool() const  { return m_cwiseIter; }
     
   protected:
-    SparseXprIter m_sparseIter;
-    DiagCoeffNested m_diagCoeffNested;
+    CwiseProductEval m_cwiseEval;
+    CwiseProductIterator m_cwiseIter;
+    Index m_outer;
   };
   
   sparse_diagonal_product_evaluator(const SparseXprType &sparseXpr, const DiagCoeffType &diagCoeff)
-    : m_sparseXprEval(sparseXpr), m_diagCoeffNested(diagCoeff)
+    : m_sparseXprNested(sparseXpr), m_diagCoeffNested(diagCoeff)
   {}
-
-  Index nonZerosEstimate() const { return m_sparseXprEval.nonZerosEstimate(); }
     
 protected:
-  evaluator<SparseXprType> m_sparseXprEval;
-  DiagCoeffNested m_diagCoeffNested;
+  typename nested_eval<SparseXprType,1>::type m_sparseXprNested;
+  typename nested_eval<DiagCoeffType,SparseXprType::IsRowMajor ? SparseXprType::RowsAtCompileTime
+                                                               : SparseXprType::ColsAtCompileTime>::type m_diagCoeffNested;
 };
 
 } // end namespace internal

@@ -11,8 +11,8 @@
 #define EIGEN_GENERAL_BLOCK_PANEL_H
 
 
-namespace Eigen {
-
+namespace Eigen { 
+  
 namespace internal {
 
 template<typename _LhsScalar, typename _RhsScalar, bool _ConjLhs=false, bool _ConjRhs=false>
@@ -25,51 +25,38 @@ inline std::ptrdiff_t manage_caching_sizes_helper(std::ptrdiff_t a, std::ptrdiff
   return a<=0 ? b : a;
 }
 
-#if EIGEN_ARCH_i386_OR_x86_64
-const std::ptrdiff_t defaultL1CacheSize = 32*1024;
-const std::ptrdiff_t defaultL2CacheSize = 256*1024;
-const std::ptrdiff_t defaultL3CacheSize = 2*1024*1024;
-#else
-const std::ptrdiff_t defaultL1CacheSize = 16*1024;
-const std::ptrdiff_t defaultL2CacheSize = 512*1024;
-const std::ptrdiff_t defaultL3CacheSize = 512*1024;
-#endif
-
-/** \internal */
-struct CacheSizes {
-  CacheSizes(): m_l1(-1),m_l2(-1),m_l3(-1) {
-    int l1CacheSize, l2CacheSize, l3CacheSize;
-    queryCacheSizes(l1CacheSize, l2CacheSize, l3CacheSize);
-    m_l1 = manage_caching_sizes_helper(l1CacheSize, defaultL1CacheSize);
-    m_l2 = manage_caching_sizes_helper(l2CacheSize, defaultL2CacheSize);
-    m_l3 = manage_caching_sizes_helper(l3CacheSize, defaultL3CacheSize);
-  }
-
-  std::ptrdiff_t m_l1;
-  std::ptrdiff_t m_l2;
-  std::ptrdiff_t m_l3;
-};
-
-
 /** \internal */
 inline void manage_caching_sizes(Action action, std::ptrdiff_t* l1, std::ptrdiff_t* l2, std::ptrdiff_t* l3)
 {
-  static CacheSizes m_cacheSizes;
+  static bool m_cache_sizes_initialized = false;
+  static std::ptrdiff_t m_l1CacheSize = 32*1024;
+  static std::ptrdiff_t m_l2CacheSize = 256*1024;
+  static std::ptrdiff_t m_l3CacheSize = 2*1024*1024;
+
+  if(!m_cache_sizes_initialized)
+  {
+    int l1CacheSize, l2CacheSize, l3CacheSize;
+    queryCacheSizes(l1CacheSize, l2CacheSize, l3CacheSize);
+    m_l1CacheSize = manage_caching_sizes_helper(l1CacheSize, 8*1024);
+    m_l2CacheSize = manage_caching_sizes_helper(l2CacheSize, 256*1024);
+    m_l3CacheSize = manage_caching_sizes_helper(l3CacheSize, 8*1024*1024);
+    m_cache_sizes_initialized = true;
+  }
 
   if(action==SetAction)
   {
     // set the cpu cache size and cache all block sizes from a global cache size in byte
     eigen_internal_assert(l1!=0 && l2!=0);
-    m_cacheSizes.m_l1 = *l1;
-    m_cacheSizes.m_l2 = *l2;
-    m_cacheSizes.m_l3 = *l3;
+    m_l1CacheSize = *l1;
+    m_l2CacheSize = *l2;
+    m_l3CacheSize = *l3;
   }
   else if(action==GetAction)
   {
     eigen_internal_assert(l1!=0 && l2!=0);
-    *l1 = m_cacheSizes.m_l1;
-    *l2 = m_cacheSizes.m_l2;
-    *l3 = m_cacheSizes.m_l3;
+    *l1 = m_l1CacheSize;
+    *l2 = m_l2CacheSize;
+    *l3 = m_l3CacheSize;
   }
   else
   {
@@ -77,22 +64,42 @@ inline void manage_caching_sizes(Action action, std::ptrdiff_t* l1, std::ptrdiff
   }
 }
 
-/* Helper for computeProductBlockingSizes.
- *
- * Given a m x k times k x n matrix product of scalar types \c LhsScalar and \c RhsScalar,
- * this function computes the blocking size parameters along the respective dimensions
- * for matrix products and related algorithms. The blocking sizes depends on various
- * parameters:
- * - the L1 and L2 cache sizes,
- * - the register level blocking sizes defined by gebp_traits,
- * - the number of scalars that fit into a packet (when vectorization is enabled).
- *
- * \sa setCpuCacheSizes */
+/** \brief Computes the blocking parameters for a m x k times k x n matrix product
+  *
+  * \param[in,out] k Input: the third dimension of the product. Output: the blocking size along the same dimension.
+  * \param[in,out] m Input: the number of rows of the left hand side. Output: the blocking size along the same dimension.
+  * \param[in,out] n Input: the number of columns of the right hand side. Output: the blocking size along the same dimension.
+  *
+  * Given a m x k times k x n matrix product of scalar types \c LhsScalar and \c RhsScalar,
+  * this function computes the blocking size parameters along the respective dimensions
+  * for matrix products and related algorithms. The blocking sizes depends on various
+  * parameters:
+  * - the L1 and L2 cache sizes,
+  * - the register level blocking sizes defined by gebp_traits,
+  * - the number of scalars that fit into a packet (when vectorization is enabled).
+  *
+  * \sa setCpuCacheSizes */
 
-template<typename LhsScalar, typename RhsScalar, int KcFactor, typename Index>
-void evaluateProductBlockingSizesHeuristic(Index& k, Index& m, Index& n, Index num_threads = 1)
+template<typename LhsScalar, typename RhsScalar, int KcFactor>
+void computeProductBlockingSizes(Index& k, Index& m, Index& n, Index num_threads = 1)
 {
   typedef gebp_traits<LhsScalar,RhsScalar> Traits;
+
+#ifdef EIGEN_TEST_SPECIFIC_BLOCKING_SIZES
+  EIGEN_UNUSED_VARIABLE(num_threads);
+  enum {
+    kr = 16,
+    mr = Traits::mr,
+    nr = Traits::nr
+  };
+  k = std::min<Index>(k, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_K);
+  if (k > kr) k -= k % kr;
+  m = std::min<Index>(n, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_M);
+  if (m > mr) m -= m % mr;
+  n = std::min<Index>(k, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_N);
+  if (n > nr) n -= n % nr;
+  return;
+#endif
 
   // Explanations:
   // Let's recall that the product algorithms form mc x kc vertical panels A' on the lhs and
@@ -107,204 +114,62 @@ void evaluateProductBlockingSizesHeuristic(Index& k, Index& m, Index& n, Index n
     enum {
       kdiv = KcFactor * (Traits::mr * sizeof(LhsScalar) + Traits::nr * sizeof(RhsScalar)),
       ksub = Traits::mr * Traits::nr * sizeof(ResScalar),
-      kr = 8,
+      k_mask = (0xffffffff/8)*8,
+
       mr = Traits::mr,
-      nr = Traits::nr
+      mr_mask = (0xffffffff/mr)*mr,
+
+      nr = Traits::nr,
+      nr_mask = (0xffffffff/nr)*nr
     };
-    // Increasing k gives us more time to prefetch the content of the "C"
-    // registers. However once the latency is hidden there is no point in
-    // increasing the value of k, so we'll cap it at 320 (value determined
-    // experimentally).
-    const Index k_cache = (numext::mini<Index>)((l1-ksub)/kdiv, 320);
+    Index k_cache = (l1-ksub)/kdiv;
     if (k_cache < k) {
-      k = k_cache - (k_cache % kr);
+      k = k_cache & k_mask;
       eigen_internal_assert(k > 0);
     }
 
-    const Index n_cache = (l2-l1) / (nr * sizeof(RhsScalar) * k);
-    const Index n_per_thread = numext::div_ceil(n, num_threads);
+    Index n_cache = (l2-l1) / (nr * sizeof(RhsScalar) * k);
+    Index n_per_thread = numext::div_ceil(n, num_threads);
     if (n_cache <= n_per_thread) {
       // Don't exceed the capacity of the l2 cache.
       eigen_internal_assert(n_cache >= static_cast<Index>(nr));
-      n = n_cache - (n_cache % nr);
+      n = n_cache & nr_mask;
       eigen_internal_assert(n > 0);
     } else {
-      n = (numext::mini<Index>)(n, (n_per_thread + nr - 1) - ((n_per_thread + nr - 1) % nr));
+      n = (std::min<Index>)(n, (n_per_thread + nr - 1) & nr_mask);
     }
 
     if (l3 > l2) {
       // l3 is shared between all cores, so we'll give each thread its own chunk of l3.
-      const Index m_cache = (l3-l2) / (sizeof(LhsScalar) * k * num_threads);
-      const Index m_per_thread = numext::div_ceil(m, num_threads);
+      Index m_cache = (l3-l2) / (sizeof(LhsScalar) * k * num_threads);
+      Index m_per_thread = numext::div_ceil(m, num_threads);
       if(m_cache < m_per_thread && m_cache >= static_cast<Index>(mr)) {
-        m = m_cache - (m_cache % mr);
+        m = m_cache & mr_mask;
         eigen_internal_assert(m > 0);
       } else {
-        m = (numext::mini<Index>)(m, (m_per_thread + mr - 1) - ((m_per_thread + mr - 1) % mr));
+        m = (std::min<Index>)(m, (m_per_thread + mr - 1) & mr_mask);
       }
     }
   }
   else {
     // In unit tests we do not want to use extra large matrices,
-    // so we reduce the cache size to check the blocking strategy is not flawed
-#ifdef EIGEN_DEBUG_SMALL_PRODUCT_BLOCKS
-    l1 = 9*1024;
-    l2 = 32*1024;
-    l3 = 512*1024;
-#endif
-
-    // Early return for small problems because the computation below are time consuming for small problems.
-    // Perhaps it would make more sense to consider k*n*m??
-    // Note that for very tiny problem, this function should be bypassed anyway
-    // because we use the coefficient-based implementation for them.
-    if((numext::maxi)(k,(numext::maxi)(m,n))<48)
-      return;
-
-    typedef typename Traits::ResScalar ResScalar;
-    enum {
-      k_peeling = 8,
-      k_div = KcFactor * (Traits::mr * sizeof(LhsScalar) + Traits::nr * sizeof(RhsScalar)),
-      k_sub = Traits::mr * Traits::nr * sizeof(ResScalar)
-    };
-
-    // ---- 1st level of blocking on L1, yields kc ----
-
-    // Blocking on the third dimension (i.e., k) is chosen so that an horizontal panel
-    // of size mr x kc of the lhs plus a vertical panel of kc x nr of the rhs both fits within L1 cache.
-    // We also include a register-level block of the result (mx x nr).
-    // (In an ideal world only the lhs panel would stay in L1)
-    // Moreover, kc has to be a multiple of 8 to be compatible with loop peeling, leading to a maximum blocking size of:
-    const Index max_kc = numext::maxi<Index>(((l1-k_sub)/k_div) & (~(k_peeling-1)),1);
-    const Index old_k = k;
-    if(k>max_kc)
-    {
-      // We are really blocking on the third dimension:
-      // -> reduce blocking size to make sure the last block is as large as possible
-      //    while keeping the same number of sweeps over the result.
-      k = (k%max_kc)==0 ? max_kc
-                        : max_kc - k_peeling * ((max_kc-1-(k%max_kc))/(k_peeling*(k/max_kc+1)));
-
-      eigen_internal_assert(((old_k/k) == (old_k/max_kc)) && "the number of sweeps has to remain the same");
-    }
-
-    // ---- 2nd level of blocking on max(L2,L3), yields nc ----
-
-    // TODO find a reliable way to get the actual amount of cache per core to use for 2nd level blocking, that is:
-    //      actual_l2 = max(l2, l3/nb_core_sharing_l3)
-    // The number below is quite conservative: it is better to underestimate the cache size rather than overestimating it)
-    // For instance, it corresponds to 6MB of L3 shared among 4 cores.
-    #ifdef EIGEN_DEBUG_SMALL_PRODUCT_BLOCKS
-    const Index actual_l2 = l3;
-    #else
-    const Index actual_l2 = 1572864; // == 1.5 MB
-    #endif
-
-    // Here, nc is chosen such that a block of kc x nc of the rhs fit within half of L2.
-    // The second half is implicitly reserved to access the result and lhs coefficients.
-    // When k<max_kc, then nc can arbitrarily growth. In practice, it seems to be fruitful
-    // to limit this growth: we bound nc to growth by a factor x1.5.
-    // However, if the entire lhs block fit within L1, then we are not going to block on the rows at all,
-    // and it becomes fruitful to keep the packed rhs blocks in L1 if there is enough remaining space.
-    Index max_nc;
-    const Index lhs_bytes = m * k * sizeof(LhsScalar);
-    const Index remaining_l1 = l1- k_sub - lhs_bytes;
-    if(remaining_l1 >= Index(Traits::nr*sizeof(RhsScalar))*k)
-    {
-      // L1 blocking
-      max_nc = remaining_l1 / (k*sizeof(RhsScalar));
-    }
-    else
-    {
-      // L2 blocking
-      max_nc = (3*actual_l2)/(2*2*max_kc*sizeof(RhsScalar));
-    }
-    // WARNING Below, we assume that Traits::nr is a power of two.
-    Index nc = numext::mini<Index>(actual_l2/(2*k*sizeof(RhsScalar)), max_nc) & (~(Traits::nr-1));
-    if(n>nc)
-    {
-      // We are really blocking over the columns:
-      // -> reduce blocking size to make sure the last block is as large as possible
-      //    while keeping the same number of sweeps over the packed lhs.
-      //    Here we allow one more sweep if this gives us a perfect match, thus the commented "-1"
-      n = (n%nc)==0 ? nc
-                    : (nc - Traits::nr * ((nc/*-1*/-(n%nc))/(Traits::nr*(n/nc+1))));
-    }
-    else if(old_k==k)
-    {
-      // So far, no blocking at all, i.e., kc==k, and nc==n.
-      // In this case, let's perform a blocking over the rows such that the packed lhs data is kept in cache L1/L2
-      // TODO: part of this blocking strategy is now implemented within the kernel itself, so the L1-based heuristic here should be obsolete.
-      Index problem_size = k*n*sizeof(LhsScalar);
-      Index actual_lm = actual_l2;
-      Index max_mc = m;
-      if(problem_size<=1024)
-      {
-        // problem is small enough to keep in L1
-        // Let's choose m such that lhs's block fit in 1/3 of L1
-        actual_lm = l1;
-      }
-      else if(l3!=0 && problem_size<=32768)
-      {
-        // we have both L2 and L3, and problem is small enough to be kept in L2
-        // Let's choose m such that lhs's block fit in 1/3 of L2
-        actual_lm = l2;
-        max_mc = (numext::mini<Index>)(576,max_mc);
-      }
-      Index mc = (numext::mini<Index>)(actual_lm/(3*k*sizeof(LhsScalar)), max_mc);
-      if (mc > Traits::mr) mc -= mc % Traits::mr;
-      else if (mc==0) return;
-      m = (m%mc)==0 ? mc
-                    : (mc - Traits::mr * ((mc/*-1*/-(m%mc))/(Traits::mr*(m/mc+1))));
-    }
-  }
-}
-
-template <typename Index>
-inline bool useSpecificBlockingSizes(Index& k, Index& m, Index& n)
-{
-#ifdef EIGEN_TEST_SPECIFIC_BLOCKING_SIZES
-  if (EIGEN_TEST_SPECIFIC_BLOCKING_SIZES) {
-    k = numext::mini<Index>(k, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_K);
-    m = numext::mini<Index>(m, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_M);
-    n = numext::mini<Index>(n, EIGEN_TEST_SPECIFIC_BLOCKING_SIZE_N);
-    return true;
-  }
+    // so we reduce the block size to check the blocking strategy is not flawed
+#ifndef EIGEN_DEBUG_SMALL_PRODUCT_BLOCKS
+    k = std::min<Index>(k,sizeof(LhsScalar)<=4 ? 360 : 240);
+    n = std::min<Index>(n,3840/sizeof(RhsScalar));
+    m = std::min<Index>(m,3840/sizeof(RhsScalar));
 #else
-  EIGEN_UNUSED_VARIABLE(k)
-  EIGEN_UNUSED_VARIABLE(m)
-  EIGEN_UNUSED_VARIABLE(n)
+    k = std::min<Index>(k,24);
+    n = std::min<Index>(n,384/sizeof(RhsScalar));
+    m = std::min<Index>(m,384/sizeof(RhsScalar));
 #endif
-  return false;
-}
-
-/** \brief Computes the blocking parameters for a m x k times k x n matrix product
-  *
-  * \param[in,out] k Input: the third dimension of the product. Output: the blocking size along the same dimension.
-  * \param[in,out] m Input: the number of rows of the left hand side. Output: the blocking size along the same dimension.
-  * \param[in,out] n Input: the number of columns of the right hand side. Output: the blocking size along the same dimension.
-  *
-  * Given a m x k times k x n matrix product of scalar types \c LhsScalar and \c RhsScalar,
-  * this function computes the blocking size parameters along the respective dimensions
-  * for matrix products and related algorithms.
-  *
-  * The blocking size parameters may be evaluated:
-  *   - either by a heuristic based on cache sizes;
-  *   - or using fixed prescribed values (for testing purposes).
-  *
-  * \sa setCpuCacheSizes */
-
-template<typename LhsScalar, typename RhsScalar, int KcFactor, typename Index>
-void computeProductBlockingSizes(Index& k, Index& m, Index& n, Index num_threads = 1)
-{
-  if (!useSpecificBlockingSizes(k, m, n)) {
-    evaluateProductBlockingSizesHeuristic<LhsScalar, RhsScalar, KcFactor, Index>(k, m, n, num_threads);
   }
 }
 
-template<typename LhsScalar, typename RhsScalar, typename Index>
+template<typename LhsScalar, typename RhsScalar>
 inline void computeProductBlockingSizes(Index& k, Index& m, Index& n, Index num_threads = 1)
 {
-  computeProductBlockingSizes<LhsScalar,RhsScalar,1,Index>(k, m, n, num_threads);
+  computeProductBlockingSizes<LhsScalar,RhsScalar,1>(k, m, n, num_threads);
 }
 
 #ifdef EIGEN_HAS_SINGLE_INSTRUCTION_CJMADD
@@ -353,7 +218,7 @@ class gebp_traits
 public:
   typedef _LhsScalar LhsScalar;
   typedef _RhsScalar RhsScalar;
-  typedef typename ScalarBinaryOpTraits<LhsScalar, RhsScalar>::ReturnType ResScalar;
+  typedef typename scalar_product_traits<LhsScalar, RhsScalar>::ReturnType ResScalar;
 
   enum {
     ConjLhs = _ConjLhs,
@@ -369,14 +234,11 @@ public:
     nr = 4,
 
     // register block size along the M direction (currently, this one cannot be modified)
-    default_mr = (EIGEN_PLAIN_ENUM_MIN(16,NumberOfRegisters)/2/nr)*LhsPacketSize,
 #if defined(EIGEN_HAS_SINGLE_INSTRUCTION_MADD) && !defined(EIGEN_VECTORIZE_ALTIVEC) && !defined(EIGEN_VECTORIZE_VSX)
     // we assume 16 registers
-    // See bug 992, if the scalar type is not vectorizable but that EIGEN_HAS_SINGLE_INSTRUCTION_MADD is defined,
-    // then using 3*LhsPacketSize triggers non-implemented paths in syrk.
-    mr = Vectorizable ? 3*LhsPacketSize : default_mr,
+    mr = 3*LhsPacketSize,
 #else
-    mr = default_mr,
+    mr = (EIGEN_PLAIN_ENUM_MIN(16,NumberOfRegisters)/2/nr)*LhsPacketSize,
 #endif
     
     LhsProgress = LhsPacketSize,
@@ -434,16 +296,15 @@ public:
   template<typename LhsPacketType, typename RhsPacketType, typename AccPacketType>
   EIGEN_STRONG_INLINE void madd(const LhsPacketType& a, const RhsPacketType& b, AccPacketType& c, AccPacketType& tmp) const
   {
-    conj_helper<LhsPacketType,RhsPacketType,ConjLhs,ConjRhs> cj;
     // It would be a lot cleaner to call pmadd all the time. Unfortunately if we
     // let gcc allocate the register in which to store the result of the pmul
     // (in the case where there is no FMA) gcc fails to figure out how to avoid
     // spilling register.
 #ifdef EIGEN_HAS_SINGLE_INSTRUCTION_MADD
     EIGEN_UNUSED_VARIABLE(tmp);
-    c = cj.pmadd(a,b,c);
+    c = pmadd(a,b,c);
 #else
-    tmp = b; tmp = cj.pmul(a,tmp); c = padd(c,tmp);
+    tmp = b; tmp = pmul(a,tmp); c = padd(c,tmp);
 #endif
   }
 
@@ -458,6 +319,9 @@ public:
     r = pmadd(c,alpha,r);
   }
 
+protected:
+//   conj_helper<LhsScalar,RhsScalar,ConjLhs,ConjRhs> cj;
+//   conj_helper<LhsPacket,RhsPacket,ConjLhs,ConjRhs> pcj;
 };
 
 template<typename RealScalar, bool _ConjLhs>
@@ -466,7 +330,7 @@ class gebp_traits<std::complex<RealScalar>, RealScalar, _ConjLhs, false>
 public:
   typedef std::complex<RealScalar> LhsScalar;
   typedef RealScalar RhsScalar;
-  typedef typename ScalarBinaryOpTraits<LhsScalar, RhsScalar>::ReturnType ResScalar;
+  typedef typename scalar_product_traits<LhsScalar, RhsScalar>::ReturnType ResScalar;
 
   enum {
     ConjLhs = _ConjLhs,
@@ -580,7 +444,7 @@ DoublePacket<Packet> padd(const DoublePacket<Packet> &a, const DoublePacket<Pack
 }
 
 template<typename Packet>
-const DoublePacket<Packet>& predux_downto4(const DoublePacket<Packet> &a)
+const DoublePacket<Packet>& predux4(const DoublePacket<Packet> &a)
 {
   return a;
 }
@@ -914,28 +778,16 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
     // Usually, make sense only with FMA
     if(mr>=3*Traits::LhsProgress)
     {
-      // Here, the general idea is to loop on each largest micro horizontal panel of the lhs (3*Traits::LhsProgress x depth)
-      // and on each largest micro vertical panel of the rhs (depth * nr).
-      // Blocking sizes, i.e., 'depth' has been computed so that the micro horizontal panel of the lhs fit in L1.
-      // However, if depth is too small, we can extend the number of rows of these horizontal panels.
-      // This actual number of rows is computed as follow:
-      const Index l1 = defaultL1CacheSize; // in Bytes, TODO, l1 should be passed to this function.
-      // The max(1, ...) here is needed because we may be using blocking params larger than what our known l1 cache size
-      // suggests we should be using: either because our known l1 cache size is inaccurate (e.g. on Android, we can only guess),
-      // or because we are testing specific blocking sizes.
-      const Index actual_panel_rows = (3*LhsProgress) * std::max<Index>(1,( (l1 - sizeof(ResScalar)*mr*nr - depth*nr*sizeof(RhsScalar)) / (depth * sizeof(LhsScalar) * 3*LhsProgress) ));
-      for(Index i1=0; i1<peeled_mc3; i1+=actual_panel_rows)
+      // loops on each largest micro horizontal panel of lhs (3*Traits::LhsProgress x depth)
+      for(Index i=0; i<peeled_mc3; i+=3*Traits::LhsProgress)
       {
-        const Index actual_panel_end = (std::min)(i1+actual_panel_rows, peeled_mc3);
+        // loops on each largest micro vertical panel of rhs (depth * nr)
         for(Index j2=0; j2<packet_cols4; j2+=nr)
         {
-          for(Index i=i1; i<actual_panel_end; i+=3*LhsProgress)
-          {
-          
-          // We selected a 3*Traits::LhsProgress x nr micro block of res which is entirely
+          // We select a 3*Traits::LhsProgress x nr micro block of res which is entirely
           // stored into 3 x nr registers.
           
-          const LhsScalar* blA = &blockA[i*strideA+offsetA*(3*LhsProgress)];
+          const LhsScalar* blA = &blockA[i*strideA+offsetA*(3*Traits::LhsProgress)];
           prefetch(&blA[0]);
 
           // gets res block as register
@@ -961,41 +813,72 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           prefetch(&blB[0]);
           LhsPacket A0, A1;
 
+#define EIGEN_ARCH_PREFERS_ROTATING_KERNEL EIGEN_ARCH_ARM
+
+#if EIGEN_ARCH_PREFERS_ROTATING_KERNEL
+          static const bool UseRotatingKernel =
+            Traits::LhsPacketSize == 4 &&
+            Traits::RhsPacketSize == 4 &&
+            Traits::ResPacketSize == 4;
+#endif
+
           for(Index k=0; k<peeled_kc; k+=pk)
           {
             EIGEN_ASM_COMMENT("begin gebp micro kernel 3pX4");
             RhsPacket B_0, T0;
             LhsPacket A2;
 
+#define EIGEN_GEBP_ONESTEP_LOADRHS_NONROTATING(K,N) \
+            traits.loadRhs(&blB[(N+4*K)*RhsProgress], B_0);
+
+#if EIGEN_ARCH_PREFERS_ROTATING_KERNEL
+#define EIGEN_GEBP_ONESTEP_LOADRHS(K,N) \
+            do { \
+              if (UseRotatingKernel) { \
+                if (N == 0) { \
+                  B_0 = pload<RhsPacket>(&blB[(0+4*K)*RhsProgress]); \
+                } else { \
+                  EIGEN_ASM_COMMENT("Do not reorder code, we're very tight on registers"); \
+                  B_0 = protate<1>(B_0); \
+                } \
+              } else { \
+                EIGEN_GEBP_ONESTEP_LOADRHS_NONROTATING(K,N); \
+              } \
+            } while (false)
+#else
+#define EIGEN_GEBP_ONESTEP_LOADRHS(K,N) \
+            EIGEN_GEBP_ONESTEP_LOADRHS_NONROTATING(K,N)
+#endif
+
 #define EIGEN_GEBP_ONESTEP(K) \
             do { \
               EIGEN_ASM_COMMENT("begin step of gebp micro kernel 3pX4"); \
               EIGEN_ASM_COMMENT("Note: these asm comments work around bug 935!"); \
               internal::prefetch(blA+(3*K+16)*LhsProgress); \
-              if (EIGEN_ARCH_ARM) { internal::prefetch(blB+(4*K+16)*RhsProgress); } /* Bug 953 */ \
+              internal::prefetch(blB+(4*K+16)*RhsProgress); /* Bug 953 */ \
               traits.loadLhs(&blA[(0+3*K)*LhsProgress], A0);  \
               traits.loadLhs(&blA[(1+3*K)*LhsProgress], A1);  \
               traits.loadLhs(&blA[(2+3*K)*LhsProgress], A2);  \
-              traits.loadRhs(blB + (0+4*K)*Traits::RhsProgress, B_0); \
+              EIGEN_GEBP_ONESTEP_LOADRHS(K, 0); \
               traits.madd(A0, B_0, C0, T0); \
               traits.madd(A1, B_0, C4, T0); \
               traits.madd(A2, B_0, C8, B_0); \
-              traits.loadRhs(blB + (1+4*K)*Traits::RhsProgress, B_0); \
+              EIGEN_GEBP_ONESTEP_LOADRHS(K, 1); \
               traits.madd(A0, B_0, C1, T0); \
               traits.madd(A1, B_0, C5, T0); \
               traits.madd(A2, B_0, C9, B_0); \
-              traits.loadRhs(blB + (2+4*K)*Traits::RhsProgress, B_0); \
+              EIGEN_GEBP_ONESTEP_LOADRHS(K, 2); \
               traits.madd(A0, B_0, C2,  T0); \
               traits.madd(A1, B_0, C6,  T0); \
               traits.madd(A2, B_0, C10, B_0); \
-              traits.loadRhs(blB + (3+4*K)*Traits::RhsProgress, B_0); \
+              EIGEN_GEBP_ONESTEP_LOADRHS(K, 3); \
               traits.madd(A0, B_0, C3 , T0); \
               traits.madd(A1, B_0, C7,  T0); \
               traits.madd(A2, B_0, C11, B_0); \
               EIGEN_ASM_COMMENT("end step of gebp micro kernel 3pX4"); \
             } while(false)
 
-            internal::prefetch(blB);
+            internal::prefetch(blB + 4 * pk * sizeof(RhsScalar)); /* Bug 953 */
             EIGEN_GEBP_ONESTEP(0);
             EIGEN_GEBP_ONESTEP(1);
             EIGEN_GEBP_ONESTEP(2);
@@ -1021,6 +904,34 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           }
 
 #undef EIGEN_GEBP_ONESTEP
+#undef EIGEN_GEBP_ONESTEP_LOADRHS
+#undef EIGEN_GEBP_ONESTEP_LOADRHS_NONROTATING
+
+#if EIGEN_ARCH_PREFERS_ROTATING_KERNEL
+          if (UseRotatingKernel) {
+            #define EIGEN_GEBP_UNROTATE_RESULT(res0, res1, res2, res3) \
+              do { \
+                PacketBlock<ResPacket> resblock; \
+                resblock.packet[0] = res0; \
+                resblock.packet[1] = res1; \
+                resblock.packet[2] = res2; \
+                resblock.packet[3] = res3; \
+                ptranspose(resblock); \
+                resblock.packet[3] = protate<1>(resblock.packet[3]); \
+                resblock.packet[2] = protate<2>(resblock.packet[2]); \
+                resblock.packet[1] = protate<3>(resblock.packet[1]); \
+                ptranspose(resblock); \
+                res0 = resblock.packet[0]; \
+                res1 = resblock.packet[1]; \
+                res2 = resblock.packet[2]; \
+                res3 = resblock.packet[3]; \
+              } while (false)
+            
+            EIGEN_GEBP_UNROTATE_RESULT(C0, C1, C2, C3);
+            EIGEN_GEBP_UNROTATE_RESULT(C4, C5, C6, C7);
+            EIGEN_GEBP_UNROTATE_RESULT(C8, C9, C10, C11);
+          }
+#endif
 
           ResPacket R0, R1, R2;
           ResPacket alphav = pset1<ResPacket>(alpha);
@@ -1063,15 +974,12 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           traits.acc(C11, alphav, R2);
           r3.storePacket(0 * Traits::ResPacketSize, R0);
           r3.storePacket(1 * Traits::ResPacketSize, R1);
-          r3.storePacket(2 * Traits::ResPacketSize, R2);          
-          }
+          r3.storePacket(2 * Traits::ResPacketSize, R2);
         }
 
         // Deal with remaining columns of the rhs
         for(Index j2=packet_cols4; j2<cols; j2++)
         {
-          for(Index i=i1; i<actual_panel_end; i+=3*LhsProgress)
-          {
           // One column at a time
           const LhsScalar* blA = &blockA[i*strideA+offsetA*(3*Traits::LhsProgress)];
           prefetch(&blA[0]);
@@ -1142,8 +1050,7 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           traits.acc(C8, alphav, R2);
           r0.storePacket(0 * Traits::ResPacketSize, R0);
           r0.storePacket(1 * Traits::ResPacketSize, R1);
-          r0.storePacket(2 * Traits::ResPacketSize, R2);          
-          }
+          r0.storePacket(2 * Traits::ResPacketSize, R2);
         }
       }
     }
@@ -1151,21 +1058,13 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
     //---------- Process 2 * LhsProgress rows at once ----------
     if(mr>=2*Traits::LhsProgress)
     {
-      const Index l1 = defaultL1CacheSize; // in Bytes, TODO, l1 should be passed to this function.
-      // The max(1, ...) here is needed because we may be using blocking params larger than what our known l1 cache size
-      // suggests we should be using: either because our known l1 cache size is inaccurate (e.g. on Android, we can only guess),
-      // or because we are testing specific blocking sizes.
-      Index actual_panel_rows = (2*LhsProgress) * std::max<Index>(1,( (l1 - sizeof(ResScalar)*mr*nr - depth*nr*sizeof(RhsScalar)) / (depth * sizeof(LhsScalar) * 2*LhsProgress) ));
-
-      for(Index i1=peeled_mc3; i1<peeled_mc2; i1+=actual_panel_rows)
+      // loops on each largest micro horizontal panel of lhs (2*LhsProgress x depth)
+      for(Index i=peeled_mc3; i<peeled_mc2; i+=2*LhsProgress)
       {
-        Index actual_panel_end = (std::min)(i1+actual_panel_rows, peeled_mc2);
+        // loops on each largest micro vertical panel of rhs (depth * nr)
         for(Index j2=0; j2<packet_cols4; j2+=nr)
         {
-          for(Index i=i1; i<actual_panel_end; i+=2*LhsProgress)
-          {
-          
-          // We selected a 2*Traits::LhsProgress x nr micro block of res which is entirely
+          // We select a 2*Traits::LhsProgress x nr micro block of res which is entirely
           // stored into 2 x nr registers.
           
           const LhsScalar* blA = &blockA[i*strideA+offsetA*(2*Traits::LhsProgress)];
@@ -1269,14 +1168,11 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           r2.storePacket(1 * Traits::ResPacketSize, R1);
           r3.storePacket(0 * Traits::ResPacketSize, R2);
           r3.storePacket(1 * Traits::ResPacketSize, R3);
-          }
         }
-      
+
         // Deal with remaining columns of the rhs
         for(Index j2=packet_cols4; j2<cols; j2++)
         {
-          for(Index i=i1; i<actual_panel_end; i+=2*LhsProgress)
-          {
           // One column at a time
           const LhsScalar* blA = &blockA[i*strideA+offsetA*(2*Traits::LhsProgress)];
           prefetch(&blA[0]);
@@ -1343,7 +1239,6 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           traits.acc(C4, alphav, R1);
           r0.storePacket(0 * Traits::ResPacketSize, R0);
           r0.storePacket(1 * Traits::ResPacketSize, R1);
-          }
         }
       }
     }
@@ -1465,17 +1360,17 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
 
           for(Index k=0; k<peeled_kc; k+=pk)
           {
-            EIGEN_ASM_COMMENT("begin gebp micro kernel 1pX1");
+            EIGEN_ASM_COMMENT("begin gebp micro kernel 2pX1");
             RhsPacket B_0;
         
 #define EIGEN_GEBGP_ONESTEP(K) \
             do {                                                                \
-              EIGEN_ASM_COMMENT("begin step of gebp micro kernel 1pX1");        \
+              EIGEN_ASM_COMMENT("begin step of gebp micro kernel 2pX1");        \
               EIGEN_ASM_COMMENT("Note: these asm comments work around bug 935!"); \
               traits.loadLhs(&blA[(0+1*K)*LhsProgress], A0);                    \
               traits.loadRhs(&blB[(0+K)*RhsProgress], B_0);                     \
               traits.madd(A0, B_0, C0, B_0);                                    \
-              EIGEN_ASM_COMMENT("end step of gebp micro kernel 1pX1");          \
+              EIGEN_ASM_COMMENT("end step of gebp micro kernel 2pX1");          \
             } while(false);
 
             EIGEN_GEBGP_ONESTEP(0);
@@ -1490,7 +1385,7 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
             blB += pk*RhsProgress;
             blA += pk*1*Traits::LhsProgress;
 
-            EIGEN_ASM_COMMENT("end gebp micro kernel 1pX1");
+            EIGEN_ASM_COMMENT("end gebp micro kernel 2pX1");
           }
 
           // process remaining peeled loop
@@ -1523,14 +1418,9 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
           prefetch(&blA[0]);
           const RhsScalar* blB = &blockB[j2*strideB+offsetB*nr];
 
-          // The following piece of code wont work for 512 bit registers
-          // Moreover, if LhsProgress==8 it assumes that there is a half packet of the same size
-          // as nr (which is currently 4) for the return type.
-          typedef typename unpacket_traits<SResPacket>::half SResPacketHalf;
-          if ((SwappedTraits::LhsProgress % 4) == 0 &&
-              (SwappedTraits::LhsProgress <= 8) &&
-              (SwappedTraits::LhsProgress!=8 || unpacket_traits<SResPacketHalf>::size==nr))
+          if( (SwappedTraits::LhsProgress % 4)==0 )
           {
+            // NOTE The following piece of code wont work for 512 bit registers
             SAccPacket C0, C1, C2, C3;
             straits.initAcc(C0);
             straits.initAcc(C1);
@@ -1581,10 +1471,10 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
             if(SwappedTraits::LhsProgress==8)
             {
               // Special case where we have to first reduce the accumulation register C0
-              typedef typename conditional<SwappedTraits::LhsProgress>=8,typename unpacket_traits<SResPacket>::half,SResPacket>::type SResPacketHalf;
-              typedef typename conditional<SwappedTraits::LhsProgress>=8,typename unpacket_traits<SLhsPacket>::half,SLhsPacket>::type SLhsPacketHalf;
-              typedef typename conditional<SwappedTraits::LhsProgress>=8,typename unpacket_traits<SLhsPacket>::half,SRhsPacket>::type SRhsPacketHalf;
-              typedef typename conditional<SwappedTraits::LhsProgress>=8,typename unpacket_traits<SAccPacket>::half,SAccPacket>::type SAccPacketHalf;
+              typedef typename conditional<SwappedTraits::LhsProgress==8,typename unpacket_traits<SResPacket>::half,SResPacket>::type SResPacketHalf;
+              typedef typename conditional<SwappedTraits::LhsProgress==8,typename unpacket_traits<SLhsPacket>::half,SLhsPacket>::type SLhsPacketHalf;
+              typedef typename conditional<SwappedTraits::LhsProgress==8,typename unpacket_traits<SLhsPacket>::half,SRhsPacket>::type SRhsPacketHalf;
+              typedef typename conditional<SwappedTraits::LhsProgress==8,typename unpacket_traits<SAccPacket>::half,SAccPacket>::type SAccPacketHalf;
 
               SResPacketHalf R = res.template gatherPacket<SResPacketHalf>(i, j2);
               SResPacketHalf alphav = pset1<SResPacketHalf>(alpha);
@@ -1596,13 +1486,13 @@ void gebp_kernel<LhsScalar,RhsScalar,Index,DataMapper,mr,nr,ConjugateLhs,Conjuga
                 SRhsPacketHalf b0;
                 straits.loadLhsUnaligned(blB, a0);
                 straits.loadRhs(blA, b0);
-                SAccPacketHalf c0 = predux_downto4(C0);
+                SAccPacketHalf c0 = predux4(C0);
                 straits.madd(a0,b0,c0,b0);
                 straits.acc(c0, alphav, R);
               }
               else
               {
-                straits.acc(predux_downto4(C0), alphav, R);
+                straits.acc(predux4(C0), alphav, R);
               }
               res.scatterPacket(i, j2, R);
             }
@@ -1967,7 +1857,7 @@ EIGEN_DONT_INLINE void gemm_pack_rhs<Scalar, Index, DataMapper, nr, ColMajor, Co
       const LinearMapper dm3 = rhs.getLinearMapper(0, j2 + 3);
 
       Index k=0;
-      if((PacketSize%4)==0) // TODO enable vectorized transposition for PacketSize==2 ??
+      if((PacketSize%4)==0) // TODO enbale vectorized transposition for PacketSize==2 ??
       {
         for(; k<peeled_k; k+=PacketSize) {
           PacketBlock<Packet,(PacketSize%4)==0?4:PacketSize> kernel;
@@ -2122,16 +2012,6 @@ inline std::ptrdiff_t l2CacheSize()
   std::ptrdiff_t l1, l2, l3;
   internal::manage_caching_sizes(GetAction, &l1, &l2, &l3);
   return l2;
-}
-
-/** \returns the currently set level 3 cpu cache size (in bytes) used to estimate the ideal blocking size paramete\
-rs.                                                                                                                
-* \sa setCpuCacheSize */
-inline std::ptrdiff_t l3CacheSize()
-{
-  std::ptrdiff_t l1, l2, l3;
-  internal::manage_caching_sizes(GetAction, &l1, &l2, &l3);
-  return l3;
 }
 
 /** Set the cpu L1 and L2 cache sizes (in bytes).

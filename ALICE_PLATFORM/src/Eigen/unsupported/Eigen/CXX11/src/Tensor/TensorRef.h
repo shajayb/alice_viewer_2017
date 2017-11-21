@@ -20,11 +20,11 @@ class TensorLazyBaseEvaluator {
   TensorLazyBaseEvaluator() : m_refcount(0) { }
   virtual ~TensorLazyBaseEvaluator() { }
 
-  EIGEN_DEVICE_FUNC virtual const Dimensions& dimensions() const = 0;
-  EIGEN_DEVICE_FUNC virtual const Scalar* data() const = 0;
+  virtual const Dimensions& dimensions() const = 0;
+  virtual const Scalar* data() const = 0;
 
-  EIGEN_DEVICE_FUNC virtual const Scalar coeff(DenseIndex index) const = 0;
-  EIGEN_DEVICE_FUNC virtual Scalar& coeffRef(DenseIndex index) = 0;
+  virtual const Scalar coeff(DenseIndex index) const = 0;
+  virtual Scalar& coeffRef(DenseIndex index) = 0;
 
   void incrRefCount() { ++m_refcount; }
   void decrRefCount() { --m_refcount; }
@@ -38,6 +38,7 @@ class TensorLazyBaseEvaluator {
   int m_refcount;
 };
 
+static char dummy[8];
 
 template <typename Dimensions, typename Expr, typename Device>
 class TensorLazyEvaluatorReadOnly : public TensorLazyBaseEvaluator<Dimensions, typename TensorEvaluator<Expr, Device>::Scalar> {
@@ -45,7 +46,7 @@ class TensorLazyEvaluatorReadOnly : public TensorLazyBaseEvaluator<Dimensions, t
   //  typedef typename TensorEvaluator<Expr, Device>::Dimensions Dimensions;
   typedef typename TensorEvaluator<Expr, Device>::Scalar Scalar;
 
-  TensorLazyEvaluatorReadOnly(const Expr& expr, const Device& device) : m_impl(expr, device), m_dummy(Scalar(0)) {
+  TensorLazyEvaluatorReadOnly(const Expr& expr, const Device& device) : m_impl(expr, device) {
     m_dims = m_impl.dimensions();
     m_impl.evalSubExprsIfNeeded(NULL);
   }
@@ -53,25 +54,24 @@ class TensorLazyEvaluatorReadOnly : public TensorLazyBaseEvaluator<Dimensions, t
     m_impl.cleanup();
   }
 
-  EIGEN_DEVICE_FUNC virtual const Dimensions& dimensions() const {
+  virtual const Dimensions& dimensions() const {
     return m_dims;
   }
-  EIGEN_DEVICE_FUNC virtual const Scalar* data() const {
+  virtual const Scalar* data() const {
     return m_impl.data();
   }
 
-  EIGEN_DEVICE_FUNC virtual const Scalar coeff(DenseIndex index) const {
+  virtual const Scalar coeff(DenseIndex index) const {
     return m_impl.coeff(index);
   }
-  EIGEN_DEVICE_FUNC virtual Scalar& coeffRef(DenseIndex /*index*/) {
+  virtual Scalar& coeffRef(DenseIndex /*index*/) {
     eigen_assert(false && "can't reference the coefficient of a rvalue");
-    return m_dummy;
+    return *reinterpret_cast<Scalar*>(dummy);
   };
 
  protected:
   TensorEvaluator<Expr, Device> m_impl;
   Dimensions m_dims;
-  Scalar m_dummy;
 };
 
 template <typename Dimensions, typename Expr, typename Device>
@@ -85,7 +85,7 @@ class TensorLazyEvaluatorWritable : public TensorLazyEvaluatorReadOnly<Dimension
   virtual ~TensorLazyEvaluatorWritable() {
   }
 
-  EIGEN_DEVICE_FUNC virtual Scalar& coeffRef(DenseIndex index) {
+  virtual Scalar& coeffRef(DenseIndex index) {
     return this->m_impl.coeffRef(index);
   }
 };
@@ -125,6 +125,7 @@ template<typename PlainObjectType> class TensorRef : public TensorBase<TensorRef
     typedef typename internal::traits<PlainObjectType>::StorageKind StorageKind;
     typedef typename internal::traits<PlainObjectType>::Index Index;
     typedef typename internal::traits<PlainObjectType>::Scalar Scalar;
+    typedef typename internal::packet_traits<Scalar>::type Packet;
     typedef typename NumTraits<Scalar>::Real RealScalar;
     typedef typename Base::CoeffReturnType CoeffReturnType;
     typedef Scalar* PointerType;
@@ -138,7 +139,6 @@ template<typename PlainObjectType> class TensorRef : public TensorBase<TensorRef
       PacketAccess = false,
       Layout = PlainObjectType::Layout,
       CoordAccess = false,  // to be implemented
-      RawAccess = false
     };
 
     EIGEN_STRONG_INLINE TensorRef() : m_evaluator(NULL) {
@@ -193,19 +193,19 @@ template<typename PlainObjectType> class TensorRef : public TensorBase<TensorRef
       return m_evaluator->coeff(index);
     }
 
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes> EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar operator()(Index firstIndex, IndexTypes... otherIndices) const
     {
-      const std::size_t num_indices = (sizeof...(otherIndices) + 1);
-      const array<Index, num_indices> indices{{firstIndex, otherIndices...}};
+      const std::size_t NumIndices = (sizeof...(otherIndices) + 1);
+      const array<Index, NumIndices> indices{{firstIndex, otherIndices...}};
       return coeff(indices);
     }
     template<typename... IndexTypes> EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE Scalar& coeffRef(Index firstIndex, IndexTypes... otherIndices)
     {
-      const std::size_t num_indices = (sizeof...(otherIndices) + 1);
-      const array<Index, num_indices> indices{{firstIndex, otherIndices...}};
+      const std::size_t NumIndices = (sizeof...(otherIndices) + 1);
+      const array<Index, NumIndices> indices{{firstIndex, otherIndices...}};
       return coeffRef(indices);
     }
 #else
@@ -295,7 +295,7 @@ template<typename PlainObjectType> class TensorRef : public TensorBase<TensorRef
       Index index = 0;
       if (PlainObjectType::Options & RowMajor) {
         index += indices[0];
-        for (size_t i = 1; i < NumIndices; ++i) {
+        for (int i = 1; i < NumIndices; ++i) {
           index = index * dims[i] + indices[i];
         }
       } else {
@@ -313,7 +313,7 @@ template<typename PlainObjectType> class TensorRef : public TensorBase<TensorRef
       Index index = 0;
       if (PlainObjectType::Options & RowMajor) {
         index += indices[0];
-        for (size_t i = 1; i < NumIndices; ++i) {
+        for (int i = 1; i < NumIndices; ++i) {
           index = index * dims[i] + indices[i];
         }
       } else {
@@ -357,8 +357,9 @@ struct TensorEvaluator<const TensorRef<Derived>, Device>
 {
   typedef typename Derived::Index Index;
   typedef typename Derived::Scalar Scalar;
+  typedef typename Derived::Packet Packet;
   typedef typename Derived::Scalar CoeffReturnType;
-  typedef typename PacketType<CoeffReturnType, Device>::type PacketReturnType;
+  typedef typename Derived::Packet PacketReturnType;
   typedef typename Derived::Dimensions Dimensions;
 
   enum {
@@ -366,7 +367,6 @@ struct TensorEvaluator<const TensorRef<Derived>, Device>
     PacketAccess = false,
     Layout = TensorRef<Derived>::Layout,
     CoordAccess = false,  // to be implemented
-    RawAccess = false
   };
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorEvaluator(const TensorRef<Derived>& m, const Device&)
@@ -389,7 +389,7 @@ struct TensorEvaluator<const TensorRef<Derived>, Device>
     return m_ref.coeffRef(index);
   }
 
-  EIGEN_DEVICE_FUNC Scalar* data() const { return m_ref.data(); }
+  Scalar* data() const { return m_ref.data(); }
 
  protected:
   TensorRef<Derived> m_ref;
@@ -402,8 +402,9 @@ struct TensorEvaluator<TensorRef<Derived>, Device> : public TensorEvaluator<cons
 {
   typedef typename Derived::Index Index;
   typedef typename Derived::Scalar Scalar;
+  typedef typename Derived::Packet Packet;
   typedef typename Derived::Scalar CoeffReturnType;
-  typedef typename PacketType<CoeffReturnType, Device>::type PacketReturnType;
+  typedef typename Derived::Packet PacketReturnType;
   typedef typename Derived::Dimensions Dimensions;
 
   typedef TensorEvaluator<const TensorRef<Derived>, Device> Base;
@@ -411,7 +412,6 @@ struct TensorEvaluator<TensorRef<Derived>, Device> : public TensorEvaluator<cons
   enum {
     IsAligned = false,
     PacketAccess = false,
-    RawAccess = false
   };
 
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorEvaluator(TensorRef<Derived>& m, const Device& d) : Base(m, d)

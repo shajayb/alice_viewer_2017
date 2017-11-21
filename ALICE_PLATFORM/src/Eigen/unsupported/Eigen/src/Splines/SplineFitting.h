@@ -130,12 +130,12 @@ namespace Eigen
   
     ParameterVectorType temporaryParameters(numParameters + 1);
     KnotVectorType derivativeKnots(numInternalDerivatives);
-    for (DenseIndex i = 0; i < numAverageKnots - 1; ++i)
+    for (unsigned int i = 0; i < numAverageKnots - 1; ++i)
     {
       temporaryParameters[0] = averageKnots[i];
       ParameterVectorType parameterIndices(numParameters);
       int temporaryParameterIndex = 1;
-      for (DenseIndex j = 0; j < numParameters; ++j)
+      for (int j = 0; j < numParameters; ++j)
       {
         Scalar parameter = parameters[j];
         if (parameter >= averageKnots[i] && parameter < averageKnots[i + 1])
@@ -167,7 +167,7 @@ namespace Eigen
                derivativeKnots.data(), derivativeKnots.data() + derivativeKnots.size(),
                temporaryKnots.data());
 
-    // Number of knots (one for each point and derivative) plus spline order.
+    // Number of control points (one for each point and derivative) plus spline order.
     DenseIndex numKnots = numParameters + numDerivatives + degree + 1;
     knots.resize(numKnots);
 

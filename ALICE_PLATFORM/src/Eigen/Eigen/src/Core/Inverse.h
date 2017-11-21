@@ -12,6 +12,8 @@
 
 namespace Eigen { 
 
+// TODO move the general declaration in Core, and rename this file DenseInverseImpl.h, or something like this...
+
 template<typename XprType,typename StorageKind> class InverseImpl;
 
 namespace internal {
@@ -45,16 +47,13 @@ class Inverse : public InverseImpl<XprType,typename internal::traits<XprType>::S
 public:
   typedef typename XprType::StorageIndex StorageIndex;
   typedef typename XprType::PlainObject                       PlainObject;
-  typedef typename XprType::Scalar                            Scalar;
-  typedef typename internal::ref_selector<XprType>::type      XprTypeNested;
+  typedef typename internal::nested<XprType>::type            XprTypeNested;
   typedef typename internal::remove_all<XprTypeNested>::type  XprTypeNestedCleaned;
-  typedef typename internal::ref_selector<Inverse>::type Nested;
-  typedef typename internal::remove_all<XprType>::type NestedExpression;
   
-  explicit EIGEN_DEVICE_FUNC Inverse(const XprType &xpr)
+  explicit Inverse(const XprType &xpr)
     : m_xpr(xpr)
   {}
-
+  
   EIGEN_DEVICE_FUNC Index rows() const { return m_xpr.rows(); }
   EIGEN_DEVICE_FUNC Index cols() const { return m_xpr.cols(); }
 
@@ -64,16 +63,25 @@ protected:
   XprTypeNested m_xpr;
 };
 
-// Generic API dispatcher
-template<typename XprType, typename StorageKind>
-class InverseImpl
-  : public internal::generic_xpr_base<Inverse<XprType> >::type
+/** \internal
+  * Specialization of the Inverse expression for dense expressions.
+  * Direct access to the coefficients are discared.
+  * FIXME this intermediate class is probably not needed anymore.
+  */
+template<typename XprType>
+class InverseImpl<XprType,Dense>
+  : public MatrixBase<Inverse<XprType> >
 {
+  typedef Inverse<XprType> Derived;
+  
 public:
-  typedef typename internal::generic_xpr_base<Inverse<XprType> >::type Base;
-  typedef typename XprType::Scalar Scalar;
-private:
+  
+  typedef MatrixBase<Derived> Base;
+  EIGEN_DENSE_PUBLIC_INTERFACE(Derived)
+  typedef typename internal::remove_all<XprType>::type NestedExpression;
 
+private:
+  
   Scalar coeff(Index row, Index col) const;
   Scalar coeff(Index i) const;
 };
@@ -92,11 +100,14 @@ namespace internal {
   */
 template<typename ArgType>
 struct unary_evaluator<Inverse<ArgType> >
-  : public evaluator<typename Inverse<ArgType>::PlainObject>
+  : public evaluator<typename Inverse<ArgType>::PlainObject>::type
 {
   typedef Inverse<ArgType> InverseType;
   typedef typename InverseType::PlainObject PlainObject;
-  typedef evaluator<PlainObject> Base;
+  typedef typename evaluator<PlainObject>::type Base;
+  
+  typedef evaluator<InverseType> type;
+  typedef evaluator<InverseType> nestedType;
   
   enum { Flags = Base::Flags | EvalBeforeNestingBit };
 

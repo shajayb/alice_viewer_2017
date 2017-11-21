@@ -56,8 +56,6 @@ template<typename _Scalar, int _Options, typename _StorageIndex>
  class  DynamicSparseMatrix
   : public SparseMatrixBase<DynamicSparseMatrix<_Scalar, _Options, _StorageIndex> >
 {
-    typedef SparseMatrixBase<DynamicSparseMatrix> Base;
-    using Base::convert_index;
   public:
     EIGEN_SPARSE_PUBLIC_INTERFACE(DynamicSparseMatrix)
     // FIXME: why are these operator already alvailable ???
@@ -363,6 +361,7 @@ struct evaluator<DynamicSparseMatrix<_Scalar,_Options,_StorageIndex> >
   : evaluator_base<DynamicSparseMatrix<_Scalar,_Options,_StorageIndex> >
 {
   typedef _Scalar Scalar;
+  typedef _StorageIndex Index;
   typedef DynamicSparseMatrix<_Scalar,_Options,_StorageIndex> SparseMatrixType;
   typedef typename SparseMatrixType::InnerIterator InnerIterator;
   typedef typename SparseMatrixType::ReverseInnerIterator ReverseInnerIterator;
@@ -379,8 +378,6 @@ struct evaluator<DynamicSparseMatrix<_Scalar,_Options,_StorageIndex> >
   operator const SparseMatrixType&() const { return *m_matrix; }
   
   Scalar coeff(Index row, Index col) const { return m_matrix->coeff(row,col); }
-  
-  Index nonZerosEstimate() const { return m_matrix->nonZeros(); }
 
   const SparseMatrixType *m_matrix;
 };

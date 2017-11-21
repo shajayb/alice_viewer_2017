@@ -100,8 +100,7 @@ template<typename _MatrixType> class RealSchur
       * Example: \include RealSchur_RealSchur_MatrixType.cpp
       * Output: \verbinclude RealSchur_RealSchur_MatrixType.out
       */
-    template<typename InputType>
-    explicit RealSchur(const EigenBase<InputType>& matrix, bool computeU = true)
+    explicit RealSchur(const MatrixType& matrix, bool computeU = true)
             : m_matT(matrix.rows(),matrix.cols()),
               m_matU(matrix.rows(),matrix.cols()),
               m_workspaceVector(matrix.rows()),
@@ -110,7 +109,7 @@ template<typename _MatrixType> class RealSchur
               m_matUisUptodate(false),
               m_maxIters(-1)
     {
-      compute(matrix.derived(), computeU);
+      compute(matrix, computeU);
     }
 
     /** \brief Returns the orthogonal matrix in the Schur decomposition. 
@@ -166,8 +165,7 @@ template<typename _MatrixType> class RealSchur
       *
       * \sa compute(const MatrixType&, bool, Index)
       */
-    template<typename InputType>
-    RealSchur& compute(const EigenBase<InputType>& matrix, bool computeU = true);
+    RealSchur& compute(const MatrixType& matrix, bool computeU = true);
 
     /** \brief Computes Schur decomposition of a Hessenberg matrix H = Z T Z^T
      *  \param[in] matrixH Matrix in Hessenberg form H
@@ -245,45 +243,26 @@ template<typename _MatrixType> class RealSchur
 
 
 template<typename MatrixType>
-template<typename InputType>
-RealSchur<MatrixType>& RealSchur<MatrixType>::compute(const EigenBase<InputType>& matrix, bool computeU)
+RealSchur<MatrixType>& RealSchur<MatrixType>::compute(const MatrixType& matrix, bool computeU)
 {
-  const Scalar considerAsZero = (std::numeric_limits<Scalar>::min)();
-
   eigen_assert(matrix.cols() == matrix.rows());
   Index maxIters = m_maxIters;
   if (maxIters == -1)
     maxIters = m_maxIterationsPerRow * matrix.rows();
 
-  Scalar scale = matrix.derived().cwiseAbs().maxCoeff();
-  if(scale<considerAsZero)
-  {
-    m_matT.setZero(matrix.rows(),matrix.cols());
-    if(computeU)
-      m_matU.setIdentity(matrix.rows(),matrix.cols());
-    m_info = Success;
-    m_isInitialized = true;
-    m_matUisUptodate = computeU;
-    return *this;
-  }
-
   // Step 1. Reduce to Hessenberg form
-  m_hess.compute(matrix.derived()/scale);
+  m_hess.compute(matrix);
 
   // Step 2. Reduce to real Schur form  
   computeFromHessenberg(m_hess.matrixH(), m_hess.matrixQ(), computeU);
-
-  m_matT *= scale;
   
   return *this;
 }
 template<typename MatrixType>
 template<typename HessMatrixType, typename OrthMatrixType>
 RealSchur<MatrixType>& RealSchur<MatrixType>::computeFromHessenberg(const HessMatrixType& matrixH, const OrthMatrixType& matrixQ,  bool computeU)
-{
-  using std::abs;
-
-  m_matT = matrixH;
+{  
+  m_matT = matrixH; 
   if(computeU)
     m_matU = matrixQ;
   

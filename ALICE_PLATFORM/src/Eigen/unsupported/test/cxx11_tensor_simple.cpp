@@ -14,35 +14,6 @@
 using Eigen::Tensor;
 using Eigen::RowMajor;
 
-static void test_0d()
-{
-  Tensor<int, 0> scalar1;
-  Tensor<int, 0, RowMajor> scalar2;
-  Tensor<int, 0> scalar3;
-  Tensor<int, 0, RowMajor> scalar4;
-
-  scalar3.resize();
-  scalar4.resize();
-
-  scalar1() = 7;
-  scalar2() = 13;
-  scalar3.setValues(17);
-  scalar4.setZero();
-
-  VERIFY_IS_EQUAL(scalar1.rank(), 0);
-  VERIFY_IS_EQUAL(scalar1.size(), 1);
-
-  VERIFY_IS_EQUAL(scalar1(), 7);
-  VERIFY_IS_EQUAL(scalar2(), 13);
-  VERIFY_IS_EQUAL(scalar3(), 17);
-  VERIFY_IS_EQUAL(scalar4(), 0);
-
-  Tensor<int, 0> scalar5(scalar1);
-
-  VERIFY_IS_EQUAL(scalar5(), 7);
-  VERIFY_IS_EQUAL(scalar5.data()[0], 7);
-}
-
 static void test_1d()
 {
   Tensor<int, 1> vec1(6);
@@ -195,10 +166,7 @@ static void test_3d()
   VERIFY_IS_EQUAL((epsilon(0,2,1)), -1);
   VERIFY_IS_EQUAL((epsilon(1,0,2)), -1);
 
-  array<Eigen::DenseIndex, 3> dims;
-  dims[0] = 2;
-  dims[1] = 3;
-  dims[2] = 4;
+  array<Eigen::DenseIndex, 3> dims{{2,3,4}};
   Tensor<int, 3> t1(dims);
   Tensor<int, 3, RowMajor> t2(dims);
 
@@ -299,29 +267,33 @@ static void test_resize()
   VERIFY_IS_EQUAL(epsilon.dimension(0), 2);
   VERIFY_IS_EQUAL(epsilon.dimension(1), 3);
   VERIFY_IS_EQUAL(epsilon.dimension(2), 7);
-  VERIFY_IS_EQUAL(epsilon.size(), 2*3*7);
+  VERIFY_IS_EQUAL(epsilon.dimensions().TotalSize(), 2ul*3*7);
 
   const int* old_data = epsilon.data();
   epsilon.resize(3,2,7);
   VERIFY_IS_EQUAL(epsilon.dimension(0), 3);
   VERIFY_IS_EQUAL(epsilon.dimension(1), 2);
   VERIFY_IS_EQUAL(epsilon.dimension(2), 7);
-  VERIFY_IS_EQUAL(epsilon.size(), 2*3*7);
+  VERIFY_IS_EQUAL(epsilon.dimensions().TotalSize(), 2ul*3*7);
   VERIFY_IS_EQUAL(epsilon.data(), old_data);
 
   epsilon.resize(3,5,7);
   VERIFY_IS_EQUAL(epsilon.dimension(0), 3);
   VERIFY_IS_EQUAL(epsilon.dimension(1), 5);
   VERIFY_IS_EQUAL(epsilon.dimension(2), 7);
-  VERIFY_IS_EQUAL(epsilon.size(), 3*5*7);
+  VERIFY_IS_EQUAL(epsilon.dimensions().TotalSize(), 3ul*5*7);
+  VERIFY_IS_NOT_EQUAL(epsilon.data(), old_data);
 }
 
 void test_cxx11_tensor_simple()
 {
-  CALL_SUBTEST(test_0d());
   CALL_SUBTEST(test_1d());
   CALL_SUBTEST(test_2d());
   CALL_SUBTEST(test_3d());
   CALL_SUBTEST(test_simple_assign());
   CALL_SUBTEST(test_resize());
 }
+
+/*
+ * kate: space-indent on; indent-width 2; mixedindent off; indent-mode cstyle;
+ */

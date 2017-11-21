@@ -27,14 +27,12 @@ namespace internal {
     using Base::derived;
     typedef typename Base::Scalar Scalar;
     typedef typename Base::StorageIndex StorageIndex;
-
-    inline Index nonZeros() const { return derived().nestedExpression().nonZeros(); }
     
     inline const Scalar* valuePtr() const { return derived().nestedExpression().valuePtr(); }
     inline const StorageIndex* innerIndexPtr() const { return derived().nestedExpression().innerIndexPtr(); }
     inline const StorageIndex* outerIndexPtr() const { return derived().nestedExpression().outerIndexPtr(); }
     inline const StorageIndex* innerNonZeroPtr() const { return derived().nestedExpression().innerNonZeroPtr(); }
-
+    
     inline Scalar* valuePtr() { return derived().nestedExpression().valuePtr(); }
     inline StorageIndex* innerIndexPtr() { return derived().nestedExpression().innerIndexPtr(); }
     inline StorageIndex* outerIndexPtr() { return derived().nestedExpression().outerIndexPtr(); }
@@ -42,11 +40,15 @@ namespace internal {
   };
 }
   
+// Implement nonZeros() for transpose. I'm not sure that's the best approach for that.
+// Perhaps it should be implemented in Transpose<> itself.
 template<typename MatrixType> class TransposeImpl<MatrixType,Sparse>
   : public internal::SparseTransposeImpl<MatrixType>
 {
   protected:
     typedef internal::SparseTransposeImpl<MatrixType> Base;
+  public:
+    inline Index nonZeros() const { return Base::derived().nestedExpression().nonZeros(); }
 };
 
 namespace internal {
@@ -56,12 +58,9 @@ struct unary_evaluator<Transpose<ArgType>, IteratorBased>
   : public evaluator_base<Transpose<ArgType> >
 {
     typedef typename evaluator<ArgType>::InnerIterator        EvalIterator;
+    typedef typename evaluator<ArgType>::ReverseInnerIterator EvalReverseIterator;
   public:
     typedef Transpose<ArgType> XprType;
-    
-    inline Index nonZerosEstimate() const {
-      return m_argImpl.nonZerosEstimate();
-    }
 
     class InnerIterator : public EvalIterator
     {
@@ -74,6 +73,17 @@ struct unary_evaluator<Transpose<ArgType>, IteratorBased>
       Index col() const { return EvalIterator::row(); }
     };
     
+    class ReverseInnerIterator : public EvalReverseIterator
+    {
+    public:
+      EIGEN_STRONG_INLINE ReverseInnerIterator(const unary_evaluator& unaryOp, Index outer)
+        : EvalReverseIterator(unaryOp.m_argImpl,outer)
+      {}
+      
+      Index row() const { return EvalReverseIterator::col(); }
+      Index col() const { return EvalReverseIterator::row(); }
+    };
+    
     enum {
       CoeffReadCost = evaluator<ArgType>::CoeffReadCost,
       Flags = XprType::Flags
@@ -82,7 +92,7 @@ struct unary_evaluator<Transpose<ArgType>, IteratorBased>
     explicit unary_evaluator(const XprType& op) :m_argImpl(op.nestedExpression()) {}
 
   protected:
-    evaluator<ArgType> m_argImpl;
+    typename evaluator<ArgType>::nestedType m_argImpl;
 };
 
 } // end namespace internal

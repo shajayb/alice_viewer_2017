@@ -52,6 +52,12 @@
     <ClCompile Include="src\userSrc\examples\sketch_derievedClasses_isoSurface.cpp">
       <Filter>sketches</Filter>
     </ClCompile>
+    <ClCompile Include="src\userSrc\examples\sketch_axiallyLoadedNetworks.cpp">
+      <Filter>sketches</Filter>
+    </ClCompile>
+    <ClCompile Include="src\userSrc\examples\sketch_corep_v1.cpp">
+      <Filter>sketches</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\alice\MODEL.h">

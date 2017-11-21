@@ -132,7 +132,6 @@ template <typename EivalsType, typename Cluster>
 void matrix_function_partition_eigenvalues(const EivalsType& eivals, std::list<Cluster>& clusters)
 {
   typedef typename EivalsType::Index Index;
-  typedef typename EivalsType::RealScalar RealScalar;
   for (Index i=0; i<eivals.rows(); ++i) {
     // Find cluster containing i-th ei'val, adding a new cluster if necessary
     typename std::list<Cluster>::iterator qi = matrix_function_find_cluster(i, clusters);
@@ -146,7 +145,7 @@ void matrix_function_partition_eigenvalues(const EivalsType& eivals, std::list<C
 
     // Look for other element to add to the set
     for (Index j=i+1; j<eivals.rows(); ++j) {
-      if (abs(eivals(j) - eivals(i)) <= RealScalar(matrix_function_separation)
+      if (abs(eivals(j) - eivals(i)) <= matrix_function_separation
           && std::find(qi->begin(), qi->end(), j) == qi->end()) {
         typename std::list<Cluster>::iterator qj = matrix_function_find_cluster(j, clusters);
         if (qj == clusters.end()) {
@@ -398,16 +397,17 @@ struct matrix_function_compute
 template <typename MatrixType>
 struct matrix_function_compute<MatrixType, 0>
 {  
-  template <typename MatA, typename AtomicType, typename ResultType>
-  static void run(const MatA& A, AtomicType& atomic, ResultType &result)
+  template <typename AtomicType, typename ResultType> 
+  static void run(const MatrixType& A, AtomicType& atomic, ResultType &result)
   {
     typedef internal::traits<MatrixType> Traits;
     typedef typename Traits::Scalar Scalar;
     static const int Rows = Traits::RowsAtCompileTime, Cols = Traits::ColsAtCompileTime;
+    static const int Options = MatrixType::Options;
     static const int MaxRows = Traits::MaxRowsAtCompileTime, MaxCols = Traits::MaxColsAtCompileTime;
 
     typedef std::complex<Scalar> ComplexScalar;
-    typedef Matrix<ComplexScalar, Rows, Cols, 0, MaxRows, MaxCols> ComplexMatrix;
+    typedef Matrix<ComplexScalar, Rows, Cols, Options, MaxRows, MaxCols> ComplexMatrix;
 
     ComplexMatrix CA = A.template cast<ComplexScalar>();
     ComplexMatrix Cresult;
@@ -422,10 +422,11 @@ struct matrix_function_compute<MatrixType, 0>
 template <typename MatrixType>
 struct matrix_function_compute<MatrixType, 1>
 {
-  template <typename MatA, typename AtomicType, typename ResultType>
-  static void run(const MatA& A, AtomicType& atomic, ResultType &result)
+  template <typename AtomicType, typename ResultType> 
+  static void run(const MatrixType& A, AtomicType& atomic, ResultType &result)
   {
     typedef internal::traits<MatrixType> Traits;
+    typedef typename MatrixType::Index Index;
     
     // compute Schur decomposition of A
     const ComplexSchur<MatrixType> schurOfA(A);  
@@ -484,7 +485,7 @@ template<typename Derived> class MatrixFunctionReturnValue
     typedef typename internal::stem_function<Scalar>::type StemFunction;
 
   protected:
-    typedef typename internal::ref_selector<Derived>::type DerivedNested;
+    typedef typename internal::nested<Derived>::type DerivedNested;
 
   public:
 
@@ -507,13 +508,14 @@ template<typename Derived> class MatrixFunctionReturnValue
       typedef internal::traits<NestedEvalTypeClean> Traits;
       static const int RowsAtCompileTime = Traits::RowsAtCompileTime;
       static const int ColsAtCompileTime = Traits::ColsAtCompileTime;
+      static const int Options = NestedEvalTypeClean::Options;
       typedef std::complex<typename NumTraits<Scalar>::Real> ComplexScalar;
-      typedef Matrix<ComplexScalar, Dynamic, Dynamic, 0, RowsAtCompileTime, ColsAtCompileTime> DynMatrixType;
+      typedef Matrix<ComplexScalar, Dynamic, Dynamic, Options, RowsAtCompileTime, ColsAtCompileTime> DynMatrixType;
 
       typedef internal::MatrixFunctionAtomic<DynMatrixType> AtomicType;
       AtomicType atomic(m_f);
 
-      internal::matrix_function_compute<typename NestedEvalTypeClean::PlainObject>::run(m_A, atomic, result);
+      internal::matrix_function_compute<NestedEvalTypeClean>::run(m_A, atomic, result);
     }
 
     Index rows() const { return m_A.rows(); }

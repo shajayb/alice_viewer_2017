@@ -23,36 +23,37 @@ namespace Eigen {
   * Eigen::TensorFixedSize<float, Size<3,5,7>> t;
   */
 
-template<typename Scalar_, typename Dimensions_, int Options_, typename IndexType>
-class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, Options_, IndexType> >
+template<typename Scalar_, typename Dimensions_, int Options_>
+class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, Options_> >
 {
   public:
-    typedef TensorFixedSize<Scalar_, Dimensions_, Options_, IndexType> Self;
-    typedef TensorBase<TensorFixedSize<Scalar_, Dimensions_, Options_, IndexType> > Base;
+    typedef TensorFixedSize<Scalar_, Dimensions_, Options_> Self;
+    typedef TensorBase<TensorFixedSize<Scalar_, Dimensions_, Options_> > Base;
     typedef typename Eigen::internal::nested<Self>::type Nested;
     typedef typename internal::traits<Self>::StorageKind StorageKind;
     typedef typename internal::traits<Self>::Index Index;
     typedef Scalar_ Scalar;
+    typedef typename internal::packet_traits<Scalar>::type Packet;
     typedef typename NumTraits<Scalar>::Real RealScalar;
     typedef typename Base::CoeffReturnType CoeffReturnType;
 
     static const int Options = Options_;
 
     enum {
-      IsAligned = bool(EIGEN_MAX_ALIGN_BYTES>0),
+      IsAligned = bool(EIGEN_ALIGN),
+      PacketAccess = (internal::packet_traits<Scalar>::size > 1),
       Layout = Options_ & RowMajor ? RowMajor : ColMajor,
       CoordAccess = true,
-      RawAccess = true
-    };
+   };
 
   typedef Dimensions_ Dimensions;
   static const std::size_t NumIndices = Dimensions::count;
 
   protected:
-  TensorStorage<Scalar, Dimensions, Options> m_storage;
+  TensorStorage<Scalar, NumIndices, Dimensions::total_size, Options, Dimensions> m_storage;
 
   public:
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                    rank()                   const { return NumIndices; }
+    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                      rank()                   const { return NumIndices; }
     EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                    dimension(std::size_t n) const { return m_storage.dimensions()[n]; }
     EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Dimensions&        dimensions()             const { return m_storage.dimensions(); }
     EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Index                    size()                   const { return m_storage.size(); }
@@ -65,9 +66,9 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
     inline Self& base()             { return *this; }
     inline const Self& base() const { return *this; }
 
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& coeff(Index firstIndex, IndexTypes... otherIndices) const
+    inline const Scalar& coeff(Index firstIndex, IndexTypes... otherIndices) const
     {
       // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
       EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
@@ -89,17 +90,9 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
       return m_storage.data()[index];
     }
 
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& coeff() const
-    {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE);
-      return m_storage.data()[0];
-    }
-
-
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& coeffRef(Index firstIndex, IndexTypes... otherIndices)
+    inline Scalar& coeffRef(Index firstIndex, IndexTypes... otherIndices)
     {
       // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
       EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
@@ -121,68 +114,15 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
       return m_storage.data()[index];
     }
 
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& coeffRef()
-    {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE);
-      return m_storage.data()[0];
-    }
-
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE const Scalar& operator()(Index firstIndex, IndexTypes... otherIndices) const
+    inline const Scalar& operator()(Index firstIndex, IndexTypes... otherIndices) const
     {
       // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
       EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
       return this->operator()(array<Index, NumIndices>{{firstIndex, otherIndices...}});
     }
-#else
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1) const
-    {
-      if (Options&RowMajor) {
-        const Index index = i1 + i0 * m_storage.dimensions()[1];
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + i1 * m_storage.dimensions()[0];
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1, Index i2) const
-    {
-      if (Options&RowMajor) {
-         const Index index = i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0);
-         return m_storage.data()[index];
-      } else {
-         const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * i2);
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1, Index i2, Index i3) const
-    {
-      if (Options&RowMajor) {
-        const Index index = i3 + m_storage.dimensions()[3] * (i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0));
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * (i2 + m_storage.dimensions()[2] * i3));
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()(Index i0, Index i1, Index i2, Index i3, Index i4) const
-    {
-      if (Options&RowMajor) {
-        const Index index = i4 + m_storage.dimensions()[4] * (i3 + m_storage.dimensions()[3] * (i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0)));
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * (i2 + m_storage.dimensions()[2] * (i3 + m_storage.dimensions()[3] * i4)));
-        return m_storage.data()[index];
-      }
-    }
 #endif
-
 
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar& operator()(const array<Index, NumIndices>& indices) const
@@ -199,13 +139,6 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
     }
 
     EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE const Scalar& operator()() const
-    {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE);
-      return coeff();
-    }
-
-    EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE const Scalar& operator[](Index index) const
     {
       // The bracket operator is only for vectors, use the parenthesis operator instead.
@@ -213,58 +146,13 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
       return coeff(index);
     }
 
-#if EIGEN_HAS_VARIADIC_TEMPLATES
+#ifdef EIGEN_HAS_VARIADIC_TEMPLATES
     template<typename... IndexTypes>
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE Scalar& operator()(Index firstIndex, IndexTypes... otherIndices)
+    inline Scalar& operator()(Index firstIndex, IndexTypes... otherIndices)
     {
       // The number of indices used to access a tensor coefficient must be equal to the rank of the tensor.
       EIGEN_STATIC_ASSERT(sizeof...(otherIndices) + 1 == NumIndices, YOU_MADE_A_PROGRAMMING_MISTAKE)
       return operator()(array<Index, NumIndices>{{firstIndex, otherIndices...}});
-    }
-#else
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1)
-    {
-       if (Options&RowMajor) {
-         const Index index = i1 + i0 * m_storage.dimensions()[1];
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + i1 * m_storage.dimensions()[0];
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1, Index i2)
-    {
-       if (Options&RowMajor) {
-         const Index index = i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0);
-        return m_storage.data()[index];
-      } else {
-         const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * i2);
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1, Index i2, Index i3)
-    {
-      if (Options&RowMajor) {
-        const Index index = i3 + m_storage.dimensions()[3] * (i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0));
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * (i2 + m_storage.dimensions()[2] * i3));
-        return m_storage.data()[index];
-      }
-    }
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()(Index i0, Index i1, Index i2, Index i3, Index i4)
-    {
-      if (Options&RowMajor) {
-        const Index index = i4 + m_storage.dimensions()[4] * (i3 + m_storage.dimensions()[3] * (i2 + m_storage.dimensions()[2] * (i1 + m_storage.dimensions()[1] * i0)));
-        return m_storage.data()[index];
-      } else {
-        const Index index = i0 + m_storage.dimensions()[0] * (i1 + m_storage.dimensions()[1] * (i2 + m_storage.dimensions()[2] * (i3 + m_storage.dimensions()[3] * i4)));
-        return m_storage.data()[index];
-      }
     }
 #endif
 
@@ -280,13 +168,6 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
     {
       eigen_assert(index >= 0 && index < size());
       return coeffRef(index);
-    }
-
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE Scalar& operator()()
-    {
-      EIGEN_STATIC_ASSERT(NumIndices == 0, YOU_MADE_A_PROGRAMMING_MISTAKE);
-      return coeffRef();
     }
 
     EIGEN_DEVICE_FUNC
@@ -309,29 +190,12 @@ class TensorFixedSize : public TensorBase<TensorFixedSize<Scalar_, Dimensions_, 
     {
     }
 
-#if EIGEN_HAS_RVALUE_REFERENCES
-    EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorFixedSize(Self&& other)
+#ifdef EIGEN_HAVE_RVALUE_REFERENCES
+    inline TensorFixedSize(Self&& other)
       : m_storage(other.m_storage)
     {
     }
 #endif
-
-    template<typename OtherDerived>
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE TensorFixedSize(const TensorBase<OtherDerived, ReadOnlyAccessors>& other)
-    {
-      typedef TensorAssignOp<TensorFixedSize, const OtherDerived> Assign;
-      Assign assign(*this, other.derived());
-      internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
-    }
-    template<typename OtherDerived>
-    EIGEN_DEVICE_FUNC
-    EIGEN_STRONG_INLINE TensorFixedSize(const TensorBase<OtherDerived, WriteAccessors>& other)
-    {
-      typedef TensorAssignOp<TensorFixedSize, const OtherDerived> Assign;
-      Assign assign(*this, other.derived());
-      internal::TensorExecutor<const Assign, DefaultDevice>::run(assign, DefaultDevice());
-    }
 
     EIGEN_DEVICE_FUNC
     EIGEN_STRONG_INLINE TensorFixedSize& operator=(const TensorFixedSize& other)

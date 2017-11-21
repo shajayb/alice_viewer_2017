@@ -13,6 +13,11 @@
 
 namespace Eigen {
 
+/** \class ReturnByValue
+  * \ingroup Core_Module
+  *
+  */
+
 namespace internal {
 
 template<typename Derived>
@@ -43,10 +48,6 @@ struct nested_eval<ReturnByValue<Derived>, n, PlainObject>
 
 } // end namespace internal
 
-/** \class ReturnByValue
-  * \ingroup Core_Module
-  *
-  */
 template<typename Derived> class ReturnByValue
   : public internal::dense_xpr_base< ReturnByValue<Derived> >::type, internal::no_assignment_operator
 {
@@ -93,12 +94,15 @@ namespace internal {
   
 template<typename Derived>
 struct evaluator<ReturnByValue<Derived> >
-  : public evaluator<typename internal::traits<Derived>::ReturnType>
+  : public evaluator<typename internal::traits<Derived>::ReturnType>::type
 {
   typedef ReturnByValue<Derived> XprType;
   typedef typename internal::traits<Derived>::ReturnType PlainObject;
-  typedef evaluator<PlainObject> Base;
+  typedef typename evaluator<PlainObject>::type Base;
   
+  typedef evaluator type;
+  typedef evaluator nestedType;
+
   EIGEN_DEVICE_FUNC explicit evaluator(const XprType& xpr)
     : m_result(xpr.rows(), xpr.cols())
   {

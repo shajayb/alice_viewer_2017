@@ -148,7 +148,7 @@ int main(int argc, char ** argv)
   int m = s;
   int n = s;
   int p = s;
-  int cache_size1=-1, cache_size2=l2, cache_size3 = 0;
+  int cache_size = -1;
 
   bool need_help = false;
   for (int i=1; i<argc;)
@@ -169,13 +169,7 @@ int main(int argc, char ** argv)
       else if(argv[i][1]=='c')
       {
         ++i;
-        cache_size1 = atoi(argv[i++]);
-        if(argv[i][0]!='-')
-        {
-          cache_size2 = atoi(argv[i++]);
-          if(argv[i][0]!='-')
-            cache_size3 = atoi(argv[i++]);
-        }
+        cache_size = atoi(argv[i++]);
       }
       else if(argv[i][1]=='t')
       {
@@ -197,16 +191,15 @@ int main(int argc, char ** argv)
 
   if(need_help)
   {
-    std::cout << argv[0] << " -s <matrix sizes> -c <cache sizes> -t <nb tries> -p <nb repeats>\n";
+    std::cout << argv[0] << " -s <matrix sizes> -c <cache size> -t <nb tries> -p <nb repeats>\n";
     std::cout << "   <matrix sizes> : size\n";
     std::cout << "   <matrix sizes> : rows columns depth\n";
     return 1;
   }
 
-#if EIGEN_VERSION_AT_LEAST(3,2,90)
-  if(cache_size1>0)
-    setCpuCacheSizes(cache_size1,cache_size2,cache_size3);
-#endif
+  if(cache_size>0)
+    setCpuCacheSizes(cache_size,96*cache_size);
+
   
   A a(m,p); a.setRandom();
   B b(p,n); b.setRandom();

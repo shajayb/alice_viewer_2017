@@ -44,10 +44,15 @@
 #define BTL_ASM_COMMENT(X)
 #endif
 
-#ifdef __SSE__
-#include "xmmintrin.h"
-// This enables flush to zero (FTZ) and denormals are zero (DAZ) modes:
-#define BTL_DISABLE_SSE_EXCEPTIONS()  { _mm_setcsr(_mm_getcsr() | 0x8040); }
+#if (defined __GNUC__) && (!defined __INTEL_COMPILER) && !defined(__arm__) && !defined(__powerpc__)
+#define BTL_DISABLE_SSE_EXCEPTIONS()  { \
+  int aux = 0; \
+  asm( \
+  "stmxcsr   %[aux]           \n\t" \
+  "orl       $32832, %[aux]   \n\t" \
+  "ldmxcsr   %[aux]           \n\t" \
+  : : [aux] "m" (aux)); \
+}
 #else
 #define BTL_DISABLE_SSE_EXCEPTIONS()
 #endif

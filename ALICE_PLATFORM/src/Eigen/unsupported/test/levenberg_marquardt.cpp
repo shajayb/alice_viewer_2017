@@ -9,9 +9,6 @@
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-// FIXME: These tests all check for hard-coded values. Ideally, parameters and start estimates should be randomized.
-
-
 #include <stdio.h>
 
 #include "main.h"
@@ -22,9 +19,6 @@
 #include <Eigen/src/Core/util/DisableStupidWarnings.h>
 
 using std::sqrt;
-
-// tolerance for chekcing number of iterations
-#define LM_EVAL_COUNT_TOL 4/3
 
 struct lmder_functor : DenseFunctor<double>
 {
@@ -281,7 +275,7 @@ const double chwirut2_functor::m_y[54] = { 92.9000E0 ,57.1000E0 ,31.0500E0 ,11.5
 void testNistChwirut2(void)
 {
   const int n=3;
-  LevenbergMarquardtSpace::Status info;
+  int info;
 
   VectorXd x(n);
 
@@ -616,7 +610,7 @@ const double lanczos1_functor::y[24] = { 2.513400000000E+00 ,2.044333373291E+00 
 void testNistLanczos1(void)
 {
   const int n=6;
-  LevenbergMarquardtSpace::Status info;
+  int info;
 
   VectorXd x(n);
 
@@ -630,11 +624,11 @@ void testNistLanczos1(void)
   info = lm.minimize(x);
 
   // check return value
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeErrorTooSmall);
+  VERIFY_IS_EQUAL(info, 2);
   VERIFY_IS_EQUAL(lm.nfev(), 79);
   VERIFY_IS_EQUAL(lm.njev(), 72);
   // check norm^2
-  VERIFY(lm.fvec().squaredNorm() <= 1.4307867721E-25);
+//   VERIFY_IS_APPROX(lm.fvec().squaredNorm(), 1.430899764097e-25);  // should be 1.4307867721E-25, but nist results are on 128-bit floats
   // check x
   VERIFY_IS_APPROX(x[0], 9.5100000027E-02);
   VERIFY_IS_APPROX(x[1], 1.0000000001E+00);
@@ -651,11 +645,11 @@ void testNistLanczos1(void)
   info = lm.minimize(x);
 
   // check return value
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeErrorTooSmall);
+  VERIFY_IS_EQUAL(info, 2);
   VERIFY_IS_EQUAL(lm.nfev(), 9);
   VERIFY_IS_EQUAL(lm.njev(), 8);
   // check norm^2
-  VERIFY(lm.fvec().squaredNorm() <= 1.4307867721E-25);
+//   VERIFY_IS_APPROX(lm.fvec().squaredNorm(), 1.428595533845e-25);  // should be 1.4307867721E-25, but nist results are on 128-bit floats
   // check x
   VERIFY_IS_APPROX(x[0], 9.5100000027E-02);
   VERIFY_IS_APPROX(x[1], 1.0000000001E+00);
@@ -702,7 +696,7 @@ const double rat42_functor::y[9] = { 8.930E0 ,10.800E0 ,18.590E0 ,22.330E0 ,39.3
 void testNistRat42(void)
 {
   const int n=3;
-  LevenbergMarquardtSpace::Status info;
+  int info;
 
   VectorXd x(n);
 
@@ -716,7 +710,7 @@ void testNistRat42(void)
   info = lm.minimize(x);
 
   // check return value
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeReductionTooSmall);
+  VERIFY_IS_EQUAL(info, 1);
   VERIFY_IS_EQUAL(lm.nfev(), 10);
   VERIFY_IS_EQUAL(lm.njev(), 8);
   // check norm^2
@@ -734,7 +728,7 @@ void testNistRat42(void)
   info = lm.minimize(x);
 
   // check return value
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeReductionTooSmall);
+  VERIFY_IS_EQUAL(info, 1);
   VERIFY_IS_EQUAL(lm.nfev(), 6);
   VERIFY_IS_EQUAL(lm.njev(), 5);
   // check norm^2
@@ -780,7 +774,7 @@ const double MGH10_functor::y[16] = { 3.478000E+04, 2.861000E+04, 2.365000E+04, 
 void testNistMGH10(void)
 {
   const int n=3;
-  LevenbergMarquardtSpace::Status info;
+  int info;
 
   VectorXd x(n);
 
@@ -792,10 +786,6 @@ void testNistMGH10(void)
   MGH10_functor functor;
   LevenbergMarquardt<MGH10_functor> lm(functor);
   info = lm.minimize(x);
-  ++g_test_level;
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeReductionTooSmall);
-  --g_test_level;
-  // was: VERIFY_IS_EQUAL(info, 1);
 
   // check norm^2
   VERIFY_IS_APPROX(lm.fvec().squaredNorm(), 8.7945855171E+01);
@@ -805,13 +795,9 @@ void testNistMGH10(void)
   VERIFY_IS_APPROX(x[2], 3.4522363462E+02);
   
   // check return value
-
-  ++g_test_level;
+  //VERIFY_IS_EQUAL(info, 1);
   VERIFY_IS_EQUAL(lm.nfev(), 284 );
   VERIFY_IS_EQUAL(lm.njev(), 249 );
-  --g_test_level;
-  VERIFY(lm.nfev() < 284 * LM_EVAL_COUNT_TOL);
-  VERIFY(lm.njev() < 249 * LM_EVAL_COUNT_TOL);
 
   /*
    * Second try
@@ -819,10 +805,6 @@ void testNistMGH10(void)
   x<< 0.02, 4000., 250.;
   // do the computation
   info = lm.minimize(x);
-  ++g_test_level;
-  VERIFY_IS_EQUAL(info, LevenbergMarquardtSpace::RelativeReductionTooSmall);
-  // was: VERIFY_IS_EQUAL(info, 1);
-  --g_test_level;
 
   // check norm^2
   VERIFY_IS_APPROX(lm.fvec().squaredNorm(), 8.7945855171E+01);
@@ -832,12 +814,9 @@ void testNistMGH10(void)
   VERIFY_IS_APPROX(x[2], 3.4522363462E+02);
   
   // check return value
-  ++g_test_level;
+  //VERIFY_IS_EQUAL(info, 1);
   VERIFY_IS_EQUAL(lm.nfev(), 126);
   VERIFY_IS_EQUAL(lm.njev(), 116);
-  --g_test_level;
-  VERIFY(lm.nfev() < 126 * LM_EVAL_COUNT_TOL);
-  VERIFY(lm.njev() < 116 * LM_EVAL_COUNT_TOL);
 }
 
 
@@ -912,12 +891,8 @@ void testNistBoxBOD(void)
 
   // check return value
   VERIFY_IS_EQUAL(info, 1); 
-  ++g_test_level;
-  VERIFY_IS_EQUAL(lm.nfev(), 16 );
-  VERIFY_IS_EQUAL(lm.njev(), 15 );
-  --g_test_level;
-  VERIFY(lm.nfev() < 16 * LM_EVAL_COUNT_TOL);
-  VERIFY(lm.njev() < 15 * LM_EVAL_COUNT_TOL);
+  VERIFY_IS_EQUAL(lm.nfev(), 15 ); 
+  VERIFY_IS_EQUAL(lm.njev(), 14 ); 
   // check norm^2
   VERIFY_IS_APPROX(lm.fvec().squaredNorm(), 1.1680088766E+03);
   // check x

@@ -42,17 +42,6 @@ template<> struct adjoint_specific<false> {
     VERIFY_IS_APPROX(v1, v1.norm() * v3);
     VERIFY_IS_APPROX(v3, v1.normalized());
     VERIFY_IS_APPROX(v3.norm(), RealScalar(1));
-
-    // check null inputs
-    VERIFY_IS_APPROX((v1*0).normalized(), (v1*0));
-#if (!EIGEN_ARCH_i386) || defined(EIGEN_VECTORIZE)
-    RealScalar very_small = (std::numeric_limits<RealScalar>::min)();
-    VERIFY( (v1*very_small).norm() == 0 );
-    VERIFY_IS_APPROX((v1*very_small).normalized(), (v1*very_small));
-    v3 = v1*very_small;
-    v3.normalize();
-    VERIFY_IS_APPROX(v3, (v1*very_small));
-#endif
     
     // check compatibility of dot and adjoint
     ref = NumTraits<Scalar>::IsInteger ? 0 : (std::max)((std::max)(v1.norm(),v2.norm()),(std::max)((square * v2).norm(),(square.adjoint() * v1).norm()));
@@ -169,7 +158,7 @@ void test_adjoint()
   // test a large static matrix only once
   CALL_SUBTEST_7( adjoint(Matrix<float, 100, 100>()) );
 
-#ifdef EIGEN_TEST_PART_13
+#ifdef EIGEN_TEST_PART_4
   {
     MatrixXcf a(10,10), b(10,10);
     VERIFY_RAISES_ASSERT(a = a.transpose());
@@ -187,13 +176,6 @@ void test_adjoint()
     a.transpose() = a.adjoint();
     a.transpose() += a.adjoint();
     a.transpose() += a.adjoint() + b;
-
-    // regression tests for check_for_aliasing
-    MatrixXd c(10,10);
-    c = 1.0 * MatrixXd::Ones(10,10) + c;
-    c = MatrixXd::Ones(10,10) * 1.0 + c;
-    c = c + MatrixXd::Ones(10,10) .cwiseProduct( MatrixXd::Zero(10,10) );
-    c = MatrixXd::Ones(10,10) * MatrixXd::Zero(10,10);
   }
 #endif
 }

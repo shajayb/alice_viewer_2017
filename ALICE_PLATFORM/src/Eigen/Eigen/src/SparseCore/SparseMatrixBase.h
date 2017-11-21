@@ -18,36 +18,25 @@ namespace Eigen {
   *
   * \brief Base class of any sparse matrices or sparse expressions
   *
-  * \tparam Derived is the derived type, e.g. a sparse matrix type, or an expression, etc.
+  * \tparam Derived
   *
   * This class can be extended with the help of the plugin mechanism described on the page
-  * \ref TopicCustomizing_Plugins by defining the preprocessor symbol \c EIGEN_SPARSEMATRIXBASE_PLUGIN.
+  * \ref TopicCustomizingEigen by defining the preprocessor symbol \c EIGEN_SPARSEMATRIXBASE_PLUGIN.
   */
-template<typename Derived> class SparseMatrixBase
-  : public EigenBase<Derived>
+template<typename Derived> class SparseMatrixBase : public EigenBase<Derived>
 {
   public:
 
     typedef typename internal::traits<Derived>::Scalar Scalar;
-    
-    /** The numeric type of the expression' coefficients, e.g. float, double, int or std::complex<float>, etc.
-      *
-      * It is an alias for the Scalar type */
-    typedef Scalar value_type;
-    
     typedef typename internal::packet_traits<Scalar>::type PacketScalar;
     typedef typename internal::traits<Derived>::StorageKind StorageKind;
-
-    /** The integer type used to \b store indices within a SparseMatrix.
-      * For a \c SparseMatrix<Scalar,Options,IndexType> it an alias of the third template parameter \c IndexType. */
     typedef typename internal::traits<Derived>::StorageIndex StorageIndex;
-
     typedef typename internal::add_const_on_value_type_if_arithmetic<
                          typename internal::packet_traits<Scalar>::type
                      >::type PacketReturnType;
 
     typedef SparseMatrixBase StorageBaseType;
-
+    typedef EigenBase<Derived> Base;
     typedef Matrix<StorageIndex,Dynamic,1> IndexVector;
     typedef Matrix<Scalar,Dynamic,1> ScalarVector;
     
@@ -108,6 +97,7 @@ template<typename Derived> class SparseMatrixBase
                         Transpose<const Derived>
                      >::type AdjointReturnType;
     typedef Transpose<Derived> TransposeReturnType;
+    template<unsigned int UpLo> struct SelfAdjointViewReturnType { typedef SelfAdjointView<Derived, UpLo> Type; };
     typedef typename internal::add_const<Transpose<const Derived> >::type ConstTransposeReturnType;
 
     // FIXME storage order do not match evaluator storage order
@@ -139,21 +129,9 @@ template<typename Derived> class SparseMatrixBase
     inline Derived& derived() { return *static_cast<Derived*>(this); }
     inline Derived& const_cast_derived() const
     { return *static_cast<Derived*>(const_cast<SparseMatrixBase*>(this)); }
-
-    typedef EigenBase<Derived> Base;
-
 #endif // not EIGEN_PARSED_BY_DOXYGEN
 
 #define EIGEN_CURRENT_STORAGE_BASE_CLASS Eigen::SparseMatrixBase
-#ifdef EIGEN_PARSED_BY_DOXYGEN
-#define EIGEN_DOC_UNARY_ADDONS(METHOD,OP)           /** <p>This method does not change the sparsity of \c *this: the OP is applied to explicitly stored coefficients only. \sa SparseCompressedBase::coeffs() </p> */
-#define EIGEN_DOC_BLOCK_ADDONS_NOT_INNER_PANEL      /** <p> \warning This method returns a read-only expression for any sparse matrices. \sa \ref TutorialSparse_SubMatrices "Sparse block operations" </p> */
-#define EIGEN_DOC_BLOCK_ADDONS_INNER_PANEL_IF(COND) /** <p> \warning This method returns a read-write expression for COND sparse matrices only. Otherwise, the returned expression is read-only. \sa \ref TutorialSparse_SubMatrices "Sparse block operations" </p> */
-#else
-#define EIGEN_DOC_UNARY_ADDONS(X,Y)
-#define EIGEN_DOC_BLOCK_ADDONS_NOT_INNER_PANEL
-#define EIGEN_DOC_BLOCK_ADDONS_INNER_PANEL_IF(COND)
-#endif
 #   include "../plugins/CommonCwiseUnaryOps.h"
 #   include "../plugins/CommonCwiseBinaryOps.h"
 #   include "../plugins/MatrixCwiseUnaryOps.h"
@@ -162,10 +140,8 @@ template<typename Derived> class SparseMatrixBase
 #   ifdef EIGEN_SPARSEMATRIXBASE_PLUGIN
 #     include EIGEN_SPARSEMATRIXBASE_PLUGIN
 #   endif
+#   undef EIGEN_CURRENT_STORAGE_BASE_CLASS
 #undef EIGEN_CURRENT_STORAGE_BASE_CLASS
-#undef EIGEN_DOC_UNARY_ADDONS
-#undef EIGEN_DOC_BLOCK_ADDONS_NOT_INNER_PANEL
-#undef EIGEN_DOC_BLOCK_ADDONS_INNER_PANEL_IF
 
     /** \returns the number of rows. \sa cols() */
     inline Index rows() const { return derived().rows(); }
@@ -174,6 +150,9 @@ template<typename Derived> class SparseMatrixBase
     /** \returns the number of coefficients, which is \a rows()*cols().
       * \sa rows(), cols(). */
     inline Index size() const { return rows() * cols(); }
+    /** \returns the number of nonzero coefficients which is in practice the number
+      * of stored coefficients. */
+    inline Index nonZeros() const { return derived().nonZeros(); }
     /** \returns true if either the number of rows or the number of columns is equal to 1.
       * In other words, this function returns
       * \code rows()==1 || cols()==1 \endcode
@@ -217,12 +196,11 @@ template<typename Derived> class SparseMatrixBase
 
       if (Flags&RowMajorBit)
       {
-        Nested nm(m.derived());
-        internal::evaluator<NestedCleaned> thisEval(nm);
+        const Nested nm(m.derived());
         for (Index row=0; row<nm.outerSize(); ++row)
         {
           Index col = 0;
-          for (typename internal::evaluator<NestedCleaned>::InnerIterator it(thisEval, row); it; ++it)
+          for (typename NestedCleaned::InnerIterator it(nm.derived(), row); it; ++it)
           {
             for ( ; col<it.index(); ++col)
               s << "0 ";
@@ -236,11 +214,10 @@ template<typename Derived> class SparseMatrixBase
       }
       else
       {
-        Nested nm(m.derived());
-        internal::evaluator<NestedCleaned> thisEval(nm);
+        const Nested nm(m.derived());
         if (m.cols() == 1) {
           Index row = 0;
-          for (typename internal::evaluator<NestedCleaned>::InnerIterator it(thisEval, 0); it; ++it)
+          for (typename NestedCleaned::InnerIterator it(nm.derived(), 0); it; ++it)
           {
             for ( ; row<it.index(); ++row)
               s << "0" << std::endl;
@@ -263,32 +240,24 @@ template<typename Derived> class SparseMatrixBase
     Derived& operator+=(const SparseMatrixBase<OtherDerived>& other);
     template<typename OtherDerived>
     Derived& operator-=(const SparseMatrixBase<OtherDerived>& other);
-    
-    template<typename OtherDerived>
-    Derived& operator+=(const DiagonalBase<OtherDerived>& other);
-    template<typename OtherDerived>
-    Derived& operator-=(const DiagonalBase<OtherDerived>& other);
-
-    template<typename OtherDerived>
-    Derived& operator+=(const EigenBase<OtherDerived> &other);
-    template<typename OtherDerived>
-    Derived& operator-=(const EigenBase<OtherDerived> &other);
 
     Derived& operator*=(const Scalar& other);
     Derived& operator/=(const Scalar& other);
 
-    template<typename OtherDerived> struct CwiseProductDenseReturnType {
-      typedef CwiseBinaryOp<internal::scalar_product_op<typename ScalarBinaryOpTraits<
-                                                          typename internal::traits<Derived>::Scalar,
-                                                          typename internal::traits<OtherDerived>::Scalar
-                                                        >::ReturnType>,
-                            const Derived,
-                            const OtherDerived
-                          > Type;
-    };
+    #define EIGEN_SPARSE_CWISE_PRODUCT_RETURN_TYPE \
+      CwiseBinaryOp< \
+        internal::scalar_product_op< \
+          typename internal::scalar_product_traits< \
+            typename internal::traits<Derived>::Scalar, \
+            typename internal::traits<OtherDerived>::Scalar \
+          >::ReturnType \
+        >, \
+        const Derived, \
+        const OtherDerived \
+      >
 
     template<typename OtherDerived>
-    EIGEN_STRONG_INLINE const typename CwiseProductDenseReturnType<OtherDerived>::Type
+    EIGEN_STRONG_INLINE const EIGEN_SPARSE_CWISE_PRODUCT_RETURN_TYPE
     cwiseProduct(const MatrixBase<OtherDerived> &other) const;
 
     // sparse * diagonal
@@ -305,7 +274,7 @@ template<typename Derived> class SparseMatrixBase
     
     // sparse * sparse
     template<typename OtherDerived>
-    const Product<Derived,OtherDerived,AliasFreeProduct>
+    const Product<Derived,OtherDerived>
     operator*(const SparseMatrixBase<OtherDerived> &other) const;
     
     // sparse * dense
@@ -331,14 +300,9 @@ template<typename Derived> class SparseMatrixBase
 
     template<int Mode>
     inline const TriangularView<const Derived, Mode> triangularView() const;
-    
-    template<unsigned int UpLo> struct SelfAdjointViewReturnType { typedef SparseSelfAdjointView<Derived, UpLo> Type; };
-    template<unsigned int UpLo> struct ConstSelfAdjointViewReturnType { typedef const SparseSelfAdjointView<const Derived, UpLo> Type; };
 
-    template<unsigned int UpLo> inline 
-    typename ConstSelfAdjointViewReturnType<UpLo>::Type selfadjointView() const;
-    template<unsigned int UpLo> inline
-    typename SelfAdjointViewReturnType<UpLo>::Type selfadjointView();
+    template<unsigned int UpLo> inline const SparseSelfAdjointView<const Derived, UpLo> selfadjointView() const;
+    template<unsigned int UpLo> inline SparseSelfAdjointView<Derived, UpLo> selfadjointView();
 
     template<typename OtherDerived> Scalar dot(const MatrixBase<OtherDerived>& other) const;
     template<typename OtherDerived> Scalar dot(const SparseMatrixBase<OtherDerived>& other) const;
@@ -396,8 +360,6 @@ template<typename Derived> class SparseMatrixBase
     static inline StorageIndex convert_index(const Index idx) {
       return internal::convert_index<StorageIndex>(idx);
     }
-  private:
-    template<typename Dest> void evalTo(Dest &) const;
 };
 
 } // end namespace Eigen

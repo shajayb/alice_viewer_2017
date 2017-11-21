@@ -191,8 +191,6 @@ namespace Eigen {
      * By default the iterations start with x=0 as an initial guess of the solution.
      * One can control the start using the solveWithGuess() method.
      *
-     * MINRES can also be used in a matrix-free context, see the following \link MatrixfreeSolverExample example \endlink.
-     *
      * \sa class ConjugateGradient, BiCGSTAB, SimplicialCholesky, DiagonalPreconditioner, IdentityPreconditioner
      */
     template< typename _MatrixType, int _UpLo, typename _Preconditioner>
@@ -200,7 +198,7 @@ namespace Eigen {
     {
         
         typedef IterativeSolverBase<MINRES> Base;
-        using Base::matrix;
+        using Base::mp_matrix;
         using Base::m_error;
         using Base::m_iterations;
         using Base::m_info;
@@ -229,8 +227,7 @@ namespace Eigen {
          * this class becomes invalid. Call compute() to update it with the new
          * matrix A, or modify a copy of A.
          */
-        template<typename MatrixDerived>
-        explicit MINRES(const EigenBase<MatrixDerived>& A) : Base(A.derived()) {}
+        MINRES(const MatrixType& A) : Base(A) {}
         
         /** Destructor. */
         ~MINRES(){}
@@ -239,31 +236,21 @@ namespace Eigen {
         template<typename Rhs,typename Dest>
         void _solve_with_guess_impl(const Rhs& b, Dest& x) const
         {
-            typedef typename Base::MatrixWrapper MatrixWrapper;
-            typedef typename Base::ActualMatrixType ActualMatrixType;
-            enum {
-              TransposeInput  =   (!MatrixWrapper::MatrixFree)
-                              &&  (UpLo==(Lower|Upper))
-                              &&  (!MatrixType::IsRowMajor)
-                              &&  (!NumTraits<Scalar>::IsComplex)
-            };
-            typedef typename internal::conditional<TransposeInput,Transpose<const ActualMatrixType>, ActualMatrixType const&>::type RowMajorWrapper;
-            EIGEN_STATIC_ASSERT(EIGEN_IMPLIES(MatrixWrapper::MatrixFree,UpLo==(Lower|Upper)),MATRIX_FREE_CONJUGATE_GRADIENT_IS_COMPATIBLE_WITH_UPPER_UNION_LOWER_MODE_ONLY);
             typedef typename internal::conditional<UpLo==(Lower|Upper),
-                                                  RowMajorWrapper,
-                                                  typename MatrixWrapper::template ConstSelfAdjointViewReturnType<UpLo>::Type
-                                            >::type SelfAdjointWrapper;
-
+                                                   Ref<const MatrixType>&,
+                                                   SparseSelfAdjointView<const Ref<const MatrixType>, UpLo>
+                                                  >::type MatrixWrapperType;
+                                          
             m_iterations = Base::maxIterations();
             m_error = Base::m_tolerance;
-            RowMajorWrapper row_mat(matrix());
+            
             for(int j=0; j<b.cols(); ++j)
             {
                 m_iterations = Base::maxIterations();
                 m_error = Base::m_tolerance;
                 
                 typename Dest::ColXpr xj(x,j);
-                internal::minres(SelfAdjointWrapper(row_mat), b.col(j), xj,
+                internal::minres(MatrixWrapperType(mp_matrix), b.col(j), xj,
                                  Base::m_preconditioner, m_iterations, m_error);
             }
             

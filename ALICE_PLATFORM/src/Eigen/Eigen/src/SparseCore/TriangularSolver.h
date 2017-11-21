@@ -28,7 +28,7 @@ template<typename Lhs, typename Rhs, int Mode>
 struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Lower,RowMajor>
 {
   typedef typename Rhs::Scalar Scalar;
-  typedef evaluator<Lhs> LhsEval;
+  typedef typename evaluator<Lhs>::type LhsEval;
   typedef typename evaluator<Lhs>::InnerIterator LhsIterator;
   static void run(const Lhs& lhs, Rhs& other)
   {
@@ -65,7 +65,7 @@ template<typename Lhs, typename Rhs, int Mode>
 struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Upper,RowMajor>
 {
   typedef typename Rhs::Scalar Scalar;
-  typedef evaluator<Lhs> LhsEval;
+  typedef typename evaluator<Lhs>::type LhsEval;
   typedef typename evaluator<Lhs>::InnerIterator LhsIterator;
   static void run(const Lhs& lhs, Rhs& other)
   {
@@ -75,7 +75,7 @@ struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Upper,RowMajor>
       for(Index i=lhs.rows()-1 ; i>=0 ; --i)
       {
         Scalar tmp = other.coeff(i,col);
-        Scalar l_ii(0);
+        Scalar l_ii = 0;
         LhsIterator it(lhsEval, i);
         while(it && it.index()<i)
           ++it;
@@ -104,7 +104,7 @@ template<typename Lhs, typename Rhs, int Mode>
 struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Lower,ColMajor>
 {
   typedef typename Rhs::Scalar Scalar;
-  typedef evaluator<Lhs> LhsEval;
+  typedef typename evaluator<Lhs>::type LhsEval;
   typedef typename evaluator<Lhs>::InnerIterator LhsIterator;
   static void run(const Lhs& lhs, Rhs& other)
   {
@@ -139,7 +139,7 @@ template<typename Lhs, typename Rhs, int Mode>
 struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Upper,ColMajor>
 {
   typedef typename Rhs::Scalar Scalar;
-  typedef evaluator<Lhs> LhsEval;
+  typedef typename evaluator<Lhs>::type LhsEval;
   typedef typename evaluator<Lhs>::InnerIterator LhsIterator;
   static void run(const Lhs& lhs, Rhs& other)
   {
@@ -171,8 +171,6 @@ struct sparse_solve_triangular_selector<Lhs,Rhs,Mode,Upper,ColMajor>
 
 } // end namespace internal
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
-
 template<typename ExpressionType,unsigned int Mode>
 template<typename OtherDerived>
 void TriangularViewImpl<ExpressionType,Mode,Sparse>::solveInPlace(MatrixBase<OtherDerived>& other) const
@@ -191,7 +189,6 @@ void TriangularViewImpl<ExpressionType,Mode,Sparse>::solveInPlace(MatrixBase<Oth
   if (copy)
     other = otherCopy;
 }
-#endif
 
 // pure sparse path
 
@@ -289,7 +286,6 @@ struct sparse_solve_triangular_sparse_selector<Lhs,Rhs,Mode,UpLo,ColMajor>
 
 } // end namespace internal
 
-#ifndef EIGEN_PARSED_BY_DOXYGEN
 template<typename ExpressionType,unsigned int Mode>
 template<typename OtherDerived>
 void TriangularViewImpl<ExpressionType,Mode,Sparse>::solveInPlace(SparseMatrixBase<OtherDerived>& other) const
@@ -308,7 +304,6 @@ void TriangularViewImpl<ExpressionType,Mode,Sparse>::solveInPlace(SparseMatrixBa
 //   if (copy)
 //     other = otherCopy;
 }
-#endif
 
 } // end namespace Eigen
 

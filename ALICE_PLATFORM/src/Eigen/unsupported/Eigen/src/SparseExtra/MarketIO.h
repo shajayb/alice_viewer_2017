@@ -18,7 +18,7 @@ namespace Eigen {
 namespace internal 
 {
   template <typename Scalar>
-  inline bool GetMarketLine (std::stringstream& line, Index& M, Index& N, Index& i, Index& j, Scalar& value)
+  inline bool GetMarketLine (std::stringstream& line, int& M, int& N, int& i, int& j, Scalar& value)
   {
     line >> i >> j >> value;
     i--;
@@ -31,7 +31,7 @@ namespace internal
       return false;
   }
   template <typename Scalar>
-  inline bool GetMarketLine (std::stringstream& line, Index& M, Index& N, Index& i, Index& j, std::complex<Scalar>& value)
+  inline bool GetMarketLine (std::stringstream& line, int& M, int& N, int& i, int& j, std::complex<Scalar>& value)
   {
     Scalar valR, valI;
     line >> i >> j >> valR >> valI;
@@ -163,7 +163,7 @@ bool loadMarket(SparseMatrixType& mat, const std::string& filename)
       if(M > 0 && N > 0 && NNZ > 0) 
       {
         readsizes = true;
-        //std::cout << "sizes: " << M << "," << N << "," << NNZ << "\n";
+        std::cout << "sizes: " << M << "," << N << "," << NNZ << "\n";
         mat.resize(M,N);
         mat.reserve(NNZ);
       }

@@ -13,35 +13,13 @@
 
 namespace Eigen { 
 
-namespace internal {
-template<typename PlainObjectType, int MapOptions, typename StrideType>
-struct traits<Map<PlainObjectType, MapOptions, StrideType> >
-  : public traits<PlainObjectType>
-{
-  typedef traits<PlainObjectType> TraitsBase;
-  enum {
-    InnerStrideAtCompileTime = StrideType::InnerStrideAtCompileTime == 0
-                             ? int(PlainObjectType::InnerStrideAtCompileTime)
-                             : int(StrideType::InnerStrideAtCompileTime),
-    OuterStrideAtCompileTime = StrideType::OuterStrideAtCompileTime == 0
-                             ? int(PlainObjectType::OuterStrideAtCompileTime)
-                             : int(StrideType::OuterStrideAtCompileTime),
-    Alignment = int(MapOptions)&int(AlignedMask),
-    Flags0 = TraitsBase::Flags & (~NestByRefBit),
-    Flags = is_lvalue<PlainObjectType>::value ? int(Flags0) : (int(Flags0) & ~LvalueBit)
-  };
-private:
-  enum { Options }; // Expressions don't have Options
-};
-}
-
 /** \class Map
   * \ingroup Core_Module
   *
   * \brief A matrix or vector expression mapping an existing array of data.
   *
   * \tparam PlainObjectType the equivalent matrix type of the mapped data
-  * \tparam MapOptions specifies the pointer alignment in bytes. It can be: \c #Aligned128, , \c #Aligned64, \c #Aligned32, \c #Aligned16, \c #Aligned8 or \c #Unaligned.
+  * \tparam MapOptions specifies whether the pointer is \c #Aligned, or \c #Unaligned.
   *                The default is \c #Unaligned.
   * \tparam StrideType optionally specifies strides. By default, Map assumes the memory layout
   *                   of an ordinary, contiguous array. This can be overridden by specifying strides.
@@ -85,6 +63,29 @@ private:
   *
   * \sa PlainObjectBase::Map(), \ref TopicStorageOrders
   */
+
+namespace internal {
+template<typename PlainObjectType, int MapOptions, typename StrideType>
+struct traits<Map<PlainObjectType, MapOptions, StrideType> >
+  : public traits<PlainObjectType>
+{
+  typedef traits<PlainObjectType> TraitsBase;
+  enum {
+    InnerStrideAtCompileTime = StrideType::InnerStrideAtCompileTime == 0
+                             ? int(PlainObjectType::InnerStrideAtCompileTime)
+                             : int(StrideType::InnerStrideAtCompileTime),
+    OuterStrideAtCompileTime = StrideType::OuterStrideAtCompileTime == 0
+                             ? int(PlainObjectType::OuterStrideAtCompileTime)
+                             : int(StrideType::OuterStrideAtCompileTime),
+    IsAligned = bool(EIGEN_ALIGN) && ((int(MapOptions)&Aligned)==Aligned),
+    Flags0 = TraitsBase::Flags & (~NestByRefBit),
+    Flags = is_lvalue<PlainObjectType>::value ? int(Flags0) : (int(Flags0) & ~LvalueBit)
+  };
+private:
+  enum { Options }; // Expressions don't have Options
+};
+}
+
 template<typename PlainObjectType, int MapOptions, typename StrideType> class Map
   : public MapBase<Map<PlainObjectType, MapOptions, StrideType> >
 {
@@ -116,11 +117,11 @@ template<typename PlainObjectType, int MapOptions, typename StrideType> class Ma
     /** Constructor in the fixed-size case.
       *
       * \param dataPtr pointer to the array to map
-      * \param stride optional Stride object, passing the strides.
+      * \param a_stride optional Stride object, passing the strides.
       */
     EIGEN_DEVICE_FUNC
-    explicit inline Map(PointerArgType dataPtr, const StrideType& stride = StrideType())
-      : Base(cast_to_pointer_type(dataPtr)), m_stride(stride)
+    explicit inline Map(PointerArgType dataPtr, const StrideType& a_stride = StrideType())
+      : Base(cast_to_pointer_type(dataPtr)), m_stride(a_stride)
     {
       PlainObjectType::Base::_check_template_params();
     }
@@ -128,12 +129,12 @@ template<typename PlainObjectType, int MapOptions, typename StrideType> class Ma
     /** Constructor in the dynamic-size vector case.
       *
       * \param dataPtr pointer to the array to map
-      * \param size the size of the vector expression
-      * \param stride optional Stride object, passing the strides.
+      * \param a_size the size of the vector expression
+      * \param a_stride optional Stride object, passing the strides.
       */
     EIGEN_DEVICE_FUNC
-    inline Map(PointerArgType dataPtr, Index size, const StrideType& stride = StrideType())
-      : Base(cast_to_pointer_type(dataPtr), size), m_stride(stride)
+    inline Map(PointerArgType dataPtr, Index a_size, const StrideType& a_stride = StrideType())
+      : Base(cast_to_pointer_type(dataPtr), a_size), m_stride(a_stride)
     {
       PlainObjectType::Base::_check_template_params();
     }
@@ -141,13 +142,13 @@ template<typename PlainObjectType, int MapOptions, typename StrideType> class Ma
     /** Constructor in the dynamic-size matrix case.
       *
       * \param dataPtr pointer to the array to map
-      * \param rows the number of rows of the matrix expression
-      * \param cols the number of columns of the matrix expression
-      * \param stride optional Stride object, passing the strides.
+      * \param nbRows the number of rows of the matrix expression
+      * \param nbCols the number of columns of the matrix expression
+      * \param a_stride optional Stride object, passing the strides.
       */
     EIGEN_DEVICE_FUNC
-    inline Map(PointerArgType dataPtr, Index rows, Index cols, const StrideType& stride = StrideType())
-      : Base(cast_to_pointer_type(dataPtr), rows, cols), m_stride(stride)
+    inline Map(PointerArgType dataPtr, Index nbRows, Index nbCols, const StrideType& a_stride = StrideType())
+      : Base(cast_to_pointer_type(dataPtr), nbRows, nbCols), m_stride(a_stride)
     {
       PlainObjectType::Base::_check_template_params();
     }

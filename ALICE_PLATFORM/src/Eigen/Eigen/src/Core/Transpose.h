@@ -13,11 +13,25 @@
 
 namespace Eigen { 
 
+/** \class Transpose
+  * \ingroup Core_Module
+  *
+  * \brief Expression of the transpose of a matrix
+  *
+  * \param MatrixType the type of the object of which we are taking the transpose
+  *
+  * This class represents an expression of the transpose of a matrix.
+  * It is the return type of MatrixBase::transpose() and MatrixBase::adjoint()
+  * and most of the time this is the only way it is used.
+  *
+  * \sa MatrixBase::transpose(), MatrixBase::adjoint()
+  */
+
 namespace internal {
 template<typename MatrixType>
 struct traits<Transpose<MatrixType> > : public traits<MatrixType>
 {
-  typedef typename ref_selector<MatrixType>::type MatrixTypeNested;
+  typedef typename nested<MatrixType>::type MatrixTypeNested;
   typedef typename remove_reference<MatrixTypeNested>::type MatrixTypeNestedPlain;
   enum {
     RowsAtCompileTime = MatrixType::ColsAtCompileTime,
@@ -25,7 +39,7 @@ struct traits<Transpose<MatrixType> > : public traits<MatrixType>
     MaxRowsAtCompileTime = MatrixType::MaxColsAtCompileTime,
     MaxColsAtCompileTime = MatrixType::MaxRowsAtCompileTime,
     FlagsLvalueBit = is_lvalue<MatrixType>::value ? LvalueBit : 0,
-    Flags0 = traits<MatrixTypeNestedPlain>::Flags & ~(LvalueBit | NestByRefBit),
+    Flags0 = MatrixTypeNestedPlain::Flags & ~(LvalueBit | NestByRefBit),
     Flags1 = Flags0 | FlagsLvalueBit,
     Flags = Flags1 ^ RowMajorBit,
     InnerStrideAtCompileTime = inner_stride_at_compile_time<MatrixType>::ret,
@@ -36,32 +50,17 @@ struct traits<Transpose<MatrixType> > : public traits<MatrixType>
 
 template<typename MatrixType, typename StorageKind> class TransposeImpl;
 
-/** \class Transpose
-  * \ingroup Core_Module
-  *
-  * \brief Expression of the transpose of a matrix
-  *
-  * \tparam MatrixType the type of the object of which we are taking the transpose
-  *
-  * This class represents an expression of the transpose of a matrix.
-  * It is the return type of MatrixBase::transpose() and MatrixBase::adjoint()
-  * and most of the time this is the only way it is used.
-  *
-  * \sa MatrixBase::transpose(), MatrixBase::adjoint()
-  */
 template<typename MatrixType> class Transpose
   : public TransposeImpl<MatrixType,typename internal::traits<MatrixType>::StorageKind>
 {
   public:
-
-    typedef typename internal::ref_selector<MatrixType>::non_const_type MatrixTypeNested;
 
     typedef typename TransposeImpl<MatrixType,typename internal::traits<MatrixType>::StorageKind>::Base Base;
     EIGEN_GENERIC_PUBLIC_INTERFACE(Transpose)
     typedef typename internal::remove_all<MatrixType>::type NestedExpression;
 
     EIGEN_DEVICE_FUNC
-    explicit inline Transpose(MatrixType& matrix) : m_matrix(matrix) {}
+    explicit inline Transpose(MatrixType& a_matrix) : m_matrix(a_matrix) {}
 
     EIGEN_INHERIT_ASSIGNMENT_OPERATORS(Transpose)
 
@@ -70,21 +69,16 @@ template<typename MatrixType> class Transpose
 
     /** \returns the nested expression */
     EIGEN_DEVICE_FUNC
-    const typename internal::remove_all<MatrixTypeNested>::type&
+    const typename internal::remove_all<typename MatrixType::Nested>::type&
     nestedExpression() const { return m_matrix; }
 
     /** \returns the nested expression */
     EIGEN_DEVICE_FUNC
-    typename internal::remove_reference<MatrixTypeNested>::type&
-    nestedExpression() { return m_matrix; }
-
-    /** \internal */
-    void resize(Index nrows, Index ncols) {
-      m_matrix.resize(ncols,nrows);
-    }
+    typename internal::remove_all<typename MatrixType::Nested>::type&
+    nestedExpression() { return m_matrix.const_cast_derived(); }
 
   protected:
-    typename internal::ref_selector<MatrixType>::non_const_type m_matrix;
+    typename MatrixType::Nested m_matrix;
 };
 
 namespace internal {
@@ -239,7 +233,7 @@ struct inplace_transpose_selector<MatrixType,true,true> { // PacketSize x Packet
     typedef typename MatrixType::Scalar Scalar;
     typedef typename internal::packet_traits<typename MatrixType::Scalar>::type Packet;
     const Index PacketSize = internal::packet_traits<Scalar>::size;
-    const Index Alignment = internal::evaluator<MatrixType>::Alignment;
+    const Index Alignment = internal::evaluator<MatrixType>::Flags&AlignedBit ? Aligned : Unaligned;
     PacketBlock<Packet> A;
     for (Index i=0; i<PacketSize; ++i)
       A.packet[i] = m.template packetByOuterInner<Alignment>(i,0);
@@ -322,6 +316,14 @@ inline void MatrixBase<Derived>::adjointInPlace()
 // The following is to detect aliasing problems in most common cases.
 
 namespace internal {
+
+template<typename BinOp,typename NestedXpr,typename Rhs>
+struct blas_traits<SelfCwiseBinaryOp<BinOp,NestedXpr,Rhs> >
+ : blas_traits<NestedXpr>
+{
+  typedef SelfCwiseBinaryOp<BinOp,NestedXpr,Rhs> XprType;
+  static inline const XprType extract(const XprType& x) { return x; }
+};
 
 template<bool DestIsTransposed, typename OtherDerived>
 struct check_transpose_aliasing_compile_time_selector
