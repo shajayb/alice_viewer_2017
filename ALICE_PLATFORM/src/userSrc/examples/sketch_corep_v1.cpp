@@ -73,12 +73,38 @@ void combineMeshes(Mesh &sub, metaMesh &parent)
 	for (int i = 0; i < parent.n_f; i++)parent.faces[i].faceVertices();
 }
 
+void combineMeshes(Mesh &sub, metaMesh &parent , bool *removeFace)
+{
+	int P_nv = parent.n_v;
+	for (int i = 0; i < sub.n_v; i++)parent.createVertex(sub.positions[i]);
+
+	Vertex *FV[6];
+	for (int i = 0; i < sub.n_f; i++)
+	{
+		if( removeFace[i] ) continue;
+
+		int *f_v = sub.faces[i].faceVertices();
+
+		for (int j = 0; j < sub.faces[i].n_e; j++)
+		{
+			int id = sub.vertices[f_v[j]].id;
+			id += P_nv;
+			FV[j] = &parent.vertices[id];
+		}
+
+		parent.createFace(FV, sub.faces[i].n_e);
+	}
+
+	for (int i = 0; i < parent.n_f; i++)parent.faces[i].faceVertices();
+}
+
 #define MAX_NUM 200000
 vec P [MAX_NUM];
 qh_vertex_t VERTS[100];
 Mesh TMP;
 Mesh Prim;
 Mesh Prim_copy;
+bool removeFace[100];
 //vec Pts[100];
 void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, double wid = 0.2)
 {
@@ -166,12 +192,44 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 		
 		Prim.n_v = Prim.n_f = Prim.n_v = 0;
 		quickHull(P, num, VERTS, Prim);
-		//M = quickHull(Pts, num);
+		
+		//
+		
+		for (int f = 0; f < Prim.n_f; f += 1)
+		{
+			bool delFace = false;
+			//if( valence > 2)
+			{
+				int *f_v = Prim.faces[f].faceVertices();
+				vec fn = (Prim.positions[f_v[1]] - Prim.positions[f_v[0]]).cross((Prim.positions[f_v[2]] - Prim.positions[f_v[0]]));
+				fn.normalise();
+
+				
+
+				for (int i = 0; i < valence; i += 1)
+				{
+					Edge E = *G.vertices[vv].edgePtrs[i];
+					int other = E.vEnd->id == vv ? E.vStr->id : E.vEnd->id;
+					n = G.positions[other] - G.positions[vv];
+					n.normalise();
+
+					if ((1.0 - n * fn) < EPS )
+					{
+						delFace = true;
+						break;
+					}
+				}
+			}
+
+			removeFace[f] = delFace;
+		}
+
+		//
 
 		//////////////////////////////////////////////////////////////////////////
 		int nv = CombinedMesh.n_v;
-		combineMeshes(Prim, CombinedMesh);
-		
+		combineMeshes(Prim, CombinedMesh,removeFace);
+
 
 		for (int o = nv; o < CombinedMesh.n_v; o++)
 		{
@@ -353,7 +411,7 @@ void draw()
 	
 	//MM.display(true,true,false);
 	glColor3f(0, 0, 0);
-	MM.drawIsoContoursInRange(threshold, 0.3);
+	//MM.drawIsoContoursInRange(threshold, 0.3);
 
 	G.draw();
 
@@ -470,11 +528,11 @@ void keyPress(unsigned char k, int xm, int ym)
 	}
 	if (k == 'S')
 	{
-		double mn, mx;
+		/*double mn, mx;
 		MM.getMinMaxOfScalarField(mn, mx);
 		S.sliders[0].maxVal = mx * 1.5;
 		S.sliders[0].minVal = mn;
-		MM.createIsoContourGraph(threshold);
+		MM.createIsoContourGraph(threshold);*/
 
 		RM.reset();
 		RM.addMesh(MM);

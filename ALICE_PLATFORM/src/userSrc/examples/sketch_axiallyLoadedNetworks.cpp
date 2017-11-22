@@ -189,11 +189,11 @@ void setup()
 		max.z = MAX(imp.nodes[i].pos.z, max.z);
 	}
 
-	vec cen = (min + max)*0.5;
-	for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos -= cen;
-	for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos /= (max - min).mag() * 0.01;
+	//vec cen = (min + max)*0.5;
+	//for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos -= cen;
+	//for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos /= (max - min).mag() * 0.01;
 
-
+	for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos *= 100;
 
 	//////////////////////////////////////////////////////////////////////////
 	
