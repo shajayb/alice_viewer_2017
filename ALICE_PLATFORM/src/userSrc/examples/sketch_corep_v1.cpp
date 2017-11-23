@@ -1,6 +1,6 @@
 #define _MAIN_
 #define _ALG_LIB_
-
+//
 
 #ifdef _MAIN_
 
@@ -101,9 +101,9 @@ void combineMeshes(Mesh &sub, metaMesh &parent , bool *removeFace)
 #define MAX_NUM 200000
 vec P [MAX_NUM];
 qh_vertex_t VERTS[100];
-Mesh TMP;
-Mesh Prim;
-Mesh Prim_copy;
+Mesh HULL;
+//Mesh Prim;
+//Mesh Prim_copy;
 bool removeFace[100];
 //vec Pts[100];
 void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, double wid = 0.2 , bool edges = true , bool nodes = true)
@@ -113,10 +113,12 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 	//
 	MeshFactory fac;
 
-	int nSides = 3;
+	int nSides = 6;
 	Mesh Prim = fac.createPrism(nSides, 1.0,0,false);// fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
 	Mesh Prim_copy = fac.createPrism(nSides, 1.0, 0, false);// fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
 	///*vec *P = new vec[MAX_NUM];*/
+	Prim.n_f -= 1 * 2;
+	Prim_copy.n_f -= 1 * 2;
 
 	for (int i = 0; i < nSides; i++)Prim.positions[i + nSides].z = 1.0;
 	for (int i = 0; i < nSides; i++) Prim_copy.positions[i + nSides].z = 1.0;
@@ -179,18 +181,18 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 
 		//
 
-		Prim.n_v = Prim.n_f = Prim.n_v = 0;
-		quickHull(P, num, VERTS, Prim);
+		HULL.n_v = HULL.n_f = HULL.n_v = 0;
+		quickHull(P, num, VERTS, HULL);
 
 		//
 
-		for (int f = 0; f < Prim.n_f; f += 1)
+		for (int f = 0; f < HULL.n_f; f += 1)
 		{
 			bool delFace = false;
 			//if( valence > 2)
 			{
-				int *f_v = Prim.faces[f].faceVertices();
-				vec fn = ( Prim.positions[f_v[1]] - Prim.positions[f_v[0]] ).cross( (Prim.positions[f_v[2]] - Prim.positions[f_v[0]]) );
+				int *f_v = HULL.faces[f].faceVertices();
+				vec fn = (HULL.positions[f_v[1]] - HULL.positions[f_v[0]] ).cross( (HULL.positions[f_v[2]] - HULL.positions[f_v[0]]) );
 				fn.normalise();
 
 				for (int i = 0; i < valence; i += 1)
@@ -214,7 +216,7 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 		//////////////////////////////////////////////////////////////////////////
 
 		int nv = CombinedMesh.n_v;
-		combineMeshes(Prim, CombinedMesh, removeFace);
+		combineMeshes(HULL, CombinedMesh,removeFace);
 
 		for (int o = nv; o < CombinedMesh.n_v; o++)
 		{
@@ -237,6 +239,7 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 	}
 
 	////////////////////////////////////////////////////////////////////////// iterate through edges
+
 	if(edges)
 	for (int i = 0; i < G.n_e; i++)
 	{
@@ -346,9 +349,9 @@ void setup()
 
 
 	//////////////////////////////////////////////////////////////////////////
-	MeshFactory fac;
-	Prim = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
-	Prim_copy = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
+	//MeshFactory fac;
+	//Prim = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
+	//Prim_copy = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
 	/*vec *P = new vec[MAX_NUM];*/
 
 
@@ -435,13 +438,13 @@ void update(int value)
 void draw()
 {
 
-	backGround(1.0);
+	backGround(0.75);
 	//drawGrid(20);
 
 	glPushMatrix();
 	//glScalef(5, 5, 5);
 	
-	MM.display(false,false,true);
+	//MM.display(true,true,true);
 	glColor3f(0, 0, 0);
 	MM.drawIsoContoursInRange(threshold, 0.3);
 
@@ -453,8 +456,8 @@ void draw()
 	vec camPt = screenToCamera(cur_msx, cur_msy, 0.2);
 
 
-//	RM.updateColorArray(lightScale, flipNormals , camPt );
-// 	RM.draw(drawFaces, drawWire, drawEdges);
+	RM.updateColorArray(lightScale, flipNormals , camPt );
+ 	RM.draw(drawFaces, drawWire, drawEdges);
 	
 
 	//glPopMatrix();
