@@ -844,7 +844,7 @@ void qh__build_hull(qh_context_t* context, float epsilon)
 				verts[1] = nexthe->to_vertex;
 				verts[2] = apex;
 
-				context->faces[nexthe->adjacent_face].valid = 0;
+ 				context->faces[nexthe->adjacent_face].valid = 0;
 
 				oppedge = context->edges + nexthe->opposite_he;
 				newface = qh__next_face(context);

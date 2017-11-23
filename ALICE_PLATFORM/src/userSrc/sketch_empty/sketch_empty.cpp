@@ -21,14 +21,21 @@
 ////////////////////////////////////////////////////////////////////////// 
 ///// ---------------------------------------------------------- MODEL ------------------------------
 
+Mesh M;
 
 
 
 void setup()
 {
 
-
+	MeshFactory fac;
+	M = fac.createPrism(3, 1, 0, false);
 	
+	for (int i = 0; i < 3; i++)M.positions[i + 3].z = 1.0;
+	
+	vec min, max;
+	M.boundingBox(min, max);
+	for (int i = 0; i < M.n_v; i++)M.positions[i] -= (min + max)*0.5;
 }
 
 
@@ -44,6 +51,11 @@ void draw()
 
 
 	backGround(0.75);
+	drawGrid(20.0);
+
+	M.draw(true);
+
+	drawCircle( vec(0, 0, 0), 1.0, 32 );
 
 }
 

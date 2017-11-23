@@ -55,7 +55,7 @@ void combineMeshes(Mesh &sub, metaMesh &parent)
 	int P_nv = parent.n_v;
 	for (int i = 0; i < sub.n_v; i++)parent.createVertex(sub.positions[i]);
 
-	Vertex *FV[6];
+	Vertex *FV[20];
 	for (int i = 0; i < sub.n_f; i++)
 	{
 		int *f_v = sub.faces[i].faceVertices();
@@ -106,70 +106,55 @@ Mesh Prim;
 Mesh Prim_copy;
 bool removeFace[100];
 //vec Pts[100];
-void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, double wid = 0.2)
+void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, double wid = 0.2 , bool edges = true , bool nodes = true)
 {
 
 	//wid = endOffset;
 	//
 	MeshFactory fac;
 
-	Mesh Prim = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
-	Mesh Prim_copy = fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
+	int nSides = 3;
+	Mesh Prim = fac.createPrism(nSides, 1.0,0,false);// fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
+	Mesh Prim_copy = fac.createPrism(nSides, 1.0, 0, false);// fac.createFromOBJ("data/cube_tri.obj", 1.0, false);
 	///*vec *P = new vec[MAX_NUM];*/
 
+	for (int i = 0; i < nSides; i++)Prim.positions[i + nSides].z = 1.0;
+	for (int i = 0; i < nSides; i++) Prim_copy.positions[i + nSides].z = 1.0;
+
+	vec min, max;
+	Prim.boundingBox(min, max);
+	for (int i = 0; i < Prim.n_v; i++)Prim.positions[i].z -= 0.5;// (min + max)*0.5;
+	for ( int i = 0; i < Prim_copy.n_v; i++) Prim_copy.positions[i].z -= 0.5;//(min + max)*0.5;
+
+	cout << "--- distance" << Prim_copy.positions[0].distanceTo(Prim_copy.positions[nSides]) << endl;
 	//////////////////////////////////////////////////////////////////////////
+
 	vec u, v, n, cen;
 	float Scale[3];
 	Matrix4 T;
 
-	////////////////////////////////////////////////////////////////////////// iterate through edges
-
-	for (int i = 0; i < G.n_e; i++)
-	{
-
-		//transform matrix
-		n = G.positions[G.edges[i].vEnd->id] - G.positions[G.edges[i].vStr->id];
-		u = n.cross(vec(1, 0, 0));
-		v = n.cross(u);
-		cen = (G.positions[G.edges[i].vEnd->id] + G.positions[G.edges[i].vStr->id]) * 0.5;
-
-		Scale[2] = n.mag() - (endOffset * 2.0);
-		Scale[0] = Scale[1] = wid;
-		u.normalise(); v.normalise(); n.normalise();
-
-		T.setColumn(0, u * Scale[0]);
-		T.setColumn(1, v* Scale[1]);
-		T.setColumn(2, n* Scale[2]);
-		T.setColumn(3, cen);
-
-		//transform
-		for (int n = 0; n < Prim.n_v; n++)Prim.positions[n] = T * Prim_copy.positions[n];
-
-		//////////////////////////////////////////////////////////////////////////
-		int nv = CombinedMesh.n_v;
-		combineMeshes(Prim, CombinedMesh);
-
-		for (int o = nv; o < CombinedMesh.n_v; o++)
-		{
-			double val;
-			vec p = CombinedMesh.positions[o];
-			val = (p - cen) * n;
-			CombinedMesh.scalars[o] = val;
-		}
-	}
-
 	////////////////////////////////////////////////////////////////////////// iterate through vertices
 	int num = 0;
-	vec plPts[4];
-	plPts[0] = vec(-1, -1, 0); plPts[1] = vec(-1, 1, 0);
-	plPts[2] = vec(1, 1, 0); plPts[3] = vec(1, -1, 0);
+	vec *plPts = new vec[nSides];
+	/*plPts[0] = vec(-1, -1, 0); plPts[1] = vec(-1, 1, 0);
+	plPts[2] = vec(1, 1, 0); plPts[3] = vec(1, -1, 0);*/
+	vec pt; double r = 1.0;// fabs(1.0 * 2.0 * sin(PI / float(3)));
 
+	for (int i = 0; i < nSides; i++)plPts[i] = Prim.positions[i];
+	/*{
+
+		pt.y = r * sin(2 * PI / float(nSides) * i);
+		pt.x = r * cos(2 * PI / float(nSides) * i);
+
+	}*/
+
+	if (nodes)
 	for (int vv = 0; vv < G.n_v; vv++)
 	{
 
 		int valence = G.vertices[vv].n_e;
 		if (valence < 2)continue;
-		num = 4 * valence;
+		num = nSides * valence;
 
 		int cnt = 0;
 		for (int i = 0; i < valence; i += 1)
@@ -177,34 +162,36 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 			Edge E = *G.vertices[vv].edgePtrs[i];
 			int other = E.vEnd->id == vv ? E.vStr->id : E.vEnd->id;
 			n = G.positions[other] - G.positions[vv];
+			double len = n.mag();
 			u = n.cross(vec(1, 0, 0));
 			v = n.cross(u);
 			u.normalise(); v.normalise(); n.normalise();
-			T.setColumn(0, u);
-			T.setColumn(1, v);
+			T.setColumn(0, u * wid);
+			T.setColumn(1, v * wid );
 			T.setColumn(2, n);
-			T.setColumn(3, G.positions[vv] + n.normalise() * endOffset);
-			for (int j = 0; j < 4; j++)
-				if(cnt < MAX_NUM)P[cnt++] = T * (plPts[j] * wid * 0.5);
+			T.setColumn(3, G.positions[vv] + n *(MIN(endOffset+0.5 /*not sure why this is needed*/, len * 0.5)));
+
+			for (int j = 0; j < nSides; j++)
+				if (cnt < MAX_NUM)P[cnt++] = T * ( plPts[j] );
 
 		}
 
-		
+
+		//
+
 		Prim.n_v = Prim.n_f = Prim.n_v = 0;
 		quickHull(P, num, VERTS, Prim);
-		
+
 		//
-		
+
 		for (int f = 0; f < Prim.n_f; f += 1)
 		{
 			bool delFace = false;
 			//if( valence > 2)
 			{
 				int *f_v = Prim.faces[f].faceVertices();
-				vec fn = (Prim.positions[f_v[1]] - Prim.positions[f_v[0]]).cross((Prim.positions[f_v[2]] - Prim.positions[f_v[0]]));
+				vec fn = ( Prim.positions[f_v[1]] - Prim.positions[f_v[0]] ).cross( (Prim.positions[f_v[2]] - Prim.positions[f_v[0]]) );
 				fn.normalise();
-
-				
 
 				for (int i = 0; i < valence; i += 1)
 				{
@@ -213,7 +200,7 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 					n = G.positions[other] - G.positions[vv];
 					n.normalise();
 
-					if ((1.0 - n * fn) < EPS )
+					if ((1.0 - n * fn) < EPS)
 					{
 						delFace = true;
 						break;
@@ -224,12 +211,10 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 			removeFace[f] = delFace;
 		}
 
-		//
-
 		//////////////////////////////////////////////////////////////////////////
-		int nv = CombinedMesh.n_v;
-		combineMeshes(Prim, CombinedMesh,removeFace);
 
+		int nv = CombinedMesh.n_v;
+		combineMeshes(Prim, CombinedMesh, removeFace);
 
 		for (int o = nv; o < CombinedMesh.n_v; o++)
 		{
@@ -251,8 +236,51 @@ void meshFromGraph(Graph &G, metaMesh &CombinedMesh, double endOffset = 0.2, dou
 		}
 	}
 
-}
+	////////////////////////////////////////////////////////////////////////// iterate through edges
+	if(edges)
+	for (int i = 0; i < G.n_e; i++)
+	{
 
+		//transform matrix
+		n = G.positions[G.edges[i].vEnd->id] - G.positions[G.edges[i].vStr->id];
+		double len =  n.mag() - endOffset * 2.0;
+		if (len < 0)continue;
+
+		u = n.cross( vec(1, 0, 0) );
+		v = n.cross(u);
+		cen = ( G.positions[G.edges[i].vEnd->id] + G.positions[G.edges[i].vStr->id] ) * 0.5;
+
+		Scale[2] = len; //  n.mag() - (endOffset * 2.0);
+		Scale[0] = Scale[1] = wid;
+		u.normalise(); v.normalise(); n.normalise();
+
+		//
+
+		T.setColumn( 0, u * Scale[0] );
+		T.setColumn( 1, v * Scale[1] );
+		T.setColumn( 2, n * Scale[2] );
+		T.setColumn( 3, cen );
+
+		//transform
+		for (int n = 0; n < Prim.n_v; n++)Prim.positions[n] = T * Prim_copy.positions[n];
+
+		//////////////////////////////////////////////////////////////////////////
+		int nv = CombinedMesh.n_v;
+		combineMeshes(Prim, CombinedMesh);
+
+		for (int o = nv; o < CombinedMesh.n_v; o++)
+		{
+			double val;
+			vec p = CombinedMesh.positions[o];
+			val = (p - cen) * n;
+			CombinedMesh.scalars[o] = val;
+		}
+
+	}
+
+	
+
+}
 
 void GraphFromFile( string fileToRead, Graph &G)
 {
@@ -304,6 +332,8 @@ Graph G;
 Mesh M;
 double Eoff = 0.2;
 double Width = 0.2;
+bool edges = true;
+bool nodes = true;
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -382,6 +412,8 @@ void setup()
 	B.addButton(&drawFaces, "drawFaces");
 	B.addButton(&drawWire, "drawWire");
 	B.addButton(&drawEdges, "drawEdges");
+	B.addButton(&edges, "edges");
+	B.addButton(&nodes, "nodes");
 }
 
 void update(int value)
@@ -409,9 +441,9 @@ void draw()
 	glPushMatrix();
 	//glScalef(5, 5, 5);
 	
-	//MM.display(true,true,false);
+	MM.display(false,false,true);
 	glColor3f(0, 0, 0);
-	//MM.drawIsoContoursInRange(threshold, 0.3);
+	MM.drawIsoContoursInRange(threshold, 0.3);
 
 	G.draw();
 
@@ -421,8 +453,8 @@ void draw()
 	vec camPt = screenToCamera(cur_msx, cur_msy, 0.2);
 
 
-	RM.updateColorArray(lightScale, flipNormals , camPt );
-	RM.draw(drawFaces, drawWire, drawEdges);
+//	RM.updateColorArray(lightScale, flipNormals , camPt );
+// 	RM.draw(drawFaces, drawWire, drawEdges);
 	
 
 	//glPopMatrix();
@@ -524,15 +556,15 @@ void keyPress(unsigned char k, int xm, int ym)
 	{
 		MM.n_v = MM.n_f = MM.n_e = 0;
 		/*CombineMesh.n_v = CombineMesh.n_f = CombineMesh.n_e = 0;*/
-		meshFromGraph(G, MM, Eoff, Width);
+		meshFromGraph(G, MM, Eoff, Width,edges,nodes);
 	}
 	if (k == 'S')
 	{
-		/*double mn, mx;
+		double mn, mx;
 		MM.getMinMaxOfScalarField(mn, mx);
 		S.sliders[0].maxVal = mx * 1.5;
 		S.sliders[0].minVal = mn;
-		MM.createIsoContourGraph(threshold);*/
+		MM.createIsoContourGraph(threshold);
 
 		RM.reset();
 		RM.addMesh(MM);
