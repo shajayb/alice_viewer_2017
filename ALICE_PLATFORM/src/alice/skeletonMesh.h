@@ -162,10 +162,9 @@ public:
 			{
 				edgeDir = G.getEdgeDir(vertexId, i).normalise();
 
-				printf(" val %1.2f, %i rel.edge.id \n", 1.0 - fabs(n * fn), i);
 
-				if ((1.0 - fabs(n * fn)) < EPS || (1.0 - fabs(n * (fn * -1))) < EPS)
-				//if( fabs(n.angle(fn)) < 10 || fabs(n .angle(fn * -1)) < 10)
+				//if ((1.0 - (edgeDir * fn)) < EPS * 10.0 || (1.0 - (edgeDir * (fn * -1))) < EPS * 10.0)
+				if( fabs(edgeDir.angle(fn)) < 5 || fabs(edgeDir.angle(fn * -1)) < 5 )
 				{
 					delFace = true;
 					break;
@@ -315,14 +314,14 @@ public:
 		combinedMesh.draw(true);
 		G.draw();
 
-		for (int i = 0; i < combinedMesh.n_f; i++)
+		/*for (int i = 0; i < HULL.n_f; i++)
 		{
-			vec fn = getHullFaceNormal(i, combinedMesh);
-			vec cen = getHullFaceCenter(i, combinedMesh);
+			vec fn = getHullFaceNormal(i, HULL);
+			vec cen = getHullFaceCenter(i, HULL);
 
 			drawLine(cen, cen + fn);
 
-		}
+		}*/
 	}
 };
 
