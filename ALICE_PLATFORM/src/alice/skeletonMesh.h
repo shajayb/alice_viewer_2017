@@ -217,7 +217,7 @@ public:
 		if (nodes)
 			for (int vv = 0; vv < G.n_v; vv++)
 			{
-				if (vv != 47)continue;
+				//if (vv != 47)continue;
 				// prelims
 				int valence = G.vertices[vv].n_e;
 
