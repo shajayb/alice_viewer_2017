@@ -68,16 +68,6 @@ public:
 		positions = new vec[MAX_GRAPH_VERTS];
 	}
 
-	void constructFromGraph( Graph &G )
-	{
-
-		for (int i = 0; i < G.n_v; i += 1)
-			createVertex(G.positions[i]);
-
-		for (int i = 0; i < G.n_v; i += 1)
-			createEdge( vertices[ G.edges[i].vStr->id ], vertices[ G.edges[i].vEnd->id ]);
-		
-	}
 
 #endif // !_use vector_
 
@@ -136,6 +126,59 @@ public:
 
 
 	// ------------- ------------- ------------- -------------------------- UTILITIES - TOPOLOGY
+
+
+	void constructFromGraph(Graph &G)
+	{
+
+		for (int i = 0; i < G.n_v; i += 1)
+			createVertex(G.positions[i]);
+
+		for (int i = 0; i < G.n_v; i += 1)
+			createEdge(vertices[G.edges[i].vStr->id], vertices[G.edges[i].vEnd->id]);
+
+	}
+
+	void constructFromFile( string fileToRead )
+	{
+
+
+		std::fstream fs(fileToRead.c_str(), ios::in);
+
+		if (fs.fail())
+		{
+			cout << " error in file reading " << fileToRead << endl;
+			return;
+		}
+
+		//actualPathLength = 0;
+		reset();
+		//
+		int cnt = 0;
+		while (!fs.eof() && cnt < 10000)
+		{
+			char str[2000];
+			fs.getline(str, 2000);
+			vector<string> content = splitString(str, ",");
+
+			if (content.size() == 3)
+			{
+				vec p = extractVecFromStringArray(0, content);
+				//p *= 0.1;
+				createVertex(p);
+			}
+
+			if (content.size() == 2)
+			{
+				int v_str = atoi(content[0].c_str());
+				int v_end = atoi(content[1].c_str());
+				createEdge( vertices[v_str], vertices[v_end]);
+			}
+
+		}
+
+		fs.close();
+	}
 	
 	void boundingbox( vec &min,vec &max)
 	{
@@ -172,6 +215,7 @@ public:
 
 
 	}
+
 	Edge * edgeExists(Vertex &str, Vertex &end, bool &found)
 	{
 
@@ -189,7 +233,28 @@ public:
 		return createEdge(str, end);
 	}
 
+	vec getEdgeCenter( int edgeId)
+	{
+		return ( positions[ edges[edgeId].vEnd->id] + positions[ edges[edgeId].vStr->id]) * 0.5;
+	}
+	vec getEdgeDir( int edgeId)
+	{
+		return positions[ edges[edgeId].vEnd->id ] - positions[ edges[edgeId].vStr->id ];
+	}
+	
+	vec getEdgeDir( int vertexId , int relativeEdgeId )
+	{
+		int other = getOtherVertex(vertexId, relativeEdgeId);
+		vec n = positions[other] - positions[vertexId];
+		return n;
+	}
 
+	int getOtherVertex(int vertexId, int relativeEdgeId)
+	{
+		Edge E = *vertices[vertexId].edgePtrs[relativeEdgeId];
+		int other = E.vEnd->id == vertexId ? E.vStr->id : E.vEnd->id;
+		return other; 
+	}
 	// ------------- ------------- ------------- -------------------------- COMPUTE - TOPOLOGY
 
 	generator<Edge> getNextEdge(Edge &e)
@@ -202,7 +267,6 @@ public:
 			if (e.vStr->edgePtrs[i] != &e)co_yield *(e.vStr->edgePtrs[i]);
 
 	}
-
 
 	void addEdgeToList( Edge &e , vector<int> &connectedEdgeList)
 	{
@@ -635,6 +699,15 @@ public:
 
 	}
 
+	void drawTextAtVec( string s, vec &pt)
+	{
+		unsigned int i;
+		glRasterPos3f(pt.x, pt.y, pt.z);
+
+		for (i = 0; i < s.length(); i++)
+			glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, s[i]);
+	}
+
 	void draw(bool drawPoints = true)
 	{
 
@@ -653,7 +726,7 @@ public:
 		{
 			char s[200];
 			itoa(i, s, 10);
-			//drawString(s, positions[i]+ vec(0,0,.1));
+			drawTextAtVec( string(s), positions[i]+ vec(0,0,0.01));
 			drawPoint(positions[i]);
 			//drawR(positions[i], 0.05, 32);
 		}

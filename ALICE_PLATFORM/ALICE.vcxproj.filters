@@ -72,6 +72,9 @@
     <ClInclude Include="src\alice\object.h">
       <Filter>MVC</Filter>
     </ClInclude>
+    <ClInclude Include="src\alice\skeletonMesh.h">
+      <Filter>sketches</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="algLib">

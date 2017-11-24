@@ -108,6 +108,11 @@ public:
 		return metaMesh(M);
 	}
 
+	void reset()
+	{
+		n_f = n_e = n_v = 0;
+	}
+
 	void assignScalars(string component = "z")
 	{
 		if(component == "z")
@@ -143,6 +148,8 @@ public:
 
 		return (p - pt) * (p - pt);// p.distanceTo(pt);
 	}
+
+
 
 	//void assignScalarsAsLineDistanceField(Graph &G, double clampMin = 0, double clampMax = 5.0 , bool v1 = true , bool v2 = true)
 	//{

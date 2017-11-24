@@ -193,7 +193,7 @@ void setup()
 	//for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos -= cen;
 	//for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos /= (max - min).mag() * 0.01;
 
-	for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos *= 100;
+	for (int i = 0; i < imp.nCnt; i++)imp.nodes[i].pos *= 1;
 
 	//////////////////////////////////////////////////////////////////////////
 	
